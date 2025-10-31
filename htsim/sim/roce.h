@@ -38,6 +38,7 @@ public:
 
     virtual void connect(Route* routeout, Route* routeback, RoceSink& sink, simtime_picosec startTime);
     void set_dst(uint32_t dst) {_dstaddr = dst;}
+    void set_src(uint32_t src) {_srcaddr = src;}
     void set_traffic_logger(TrafficLogger* pktlogger);
 
     void startflow();
@@ -93,6 +94,7 @@ public:
     enum {PAUSED,READY};
 
     uint32_t _dstaddr;
+    uint32_t _srcaddr;
 
     void print_stats();
 
@@ -163,6 +165,7 @@ public:
     virtual const string& nodename() { return _nodename; }
 
     void set_src(uint32_t s) {_srcaddr = s;}
+    void set_dst(uint32_t s) {_dstaddr = s;}
  
     RoceSrc* _src;
 
@@ -171,6 +174,7 @@ public:
     bool _log_me;
 
     uint32_t _srcaddr;
+    uint32_t _dstaddr;
 
     static bool ooo_enabled;
 

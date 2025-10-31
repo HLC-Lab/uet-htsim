@@ -22,8 +22,10 @@
 #include "firstfit.h"
 #include "topology.h"
 #include "connection_matrix.h"
-#include "fat_tree_topology.h"
-#include "fat_tree_switch.h"
+//#include "fat_tree_topology.h"
+//#include "fat_tree_switch.h"
+#include "dragonfly_plus_topology.h"
+#include "dragonfly_plus_switch.h"
 
 #include <list>
 
@@ -47,7 +49,11 @@ int DEFAULT_NODES = 432;
 EventList eventlist;
 
 void exit_error(char* progr) {
-    cout << "Usage " << progr << " [-nodes N]\n\t[-q queue_size]\n\t[-queue_type composite|random|lossless|lossless_input|]\n\t[-tm traffic_matrix_file]\n\t[-strat route_strategy (single,\n\tecmp_host,ecmp_ar,\n\tecmp_host_ar ar_thresh)]\n\t[-log log_level]\n\t[-seed random_seed]\n\t[-end end_time_in_usec]\n\t[-mtu MTU]\n\t[-hop_latency x] per hop wire latency in us,default 1\n\t[-switch_latency x] switching latency in us, default 0\n\t[-start_delta] time in us to randomly delay the start of connections\n\t[-pfc_thresholds low high]" << endl;
+#ifdef DRAGONFLY_PLUS
+    cout << "Usage " << progr << "[-radix K]\n\t[-nodes N]\n\t[-size s|m|l]\n\t[-q queue_size]\n\t[-queue_type composite|random|lossless|lossless_input|]\n\t[-tm traffic_matrix_file]\n\t[-strat route_strategy (minimal,fpar)]\n\t[-log log_level]\n\t[-linkspeed linkspeed]\n\t[-seed random_seed]\n\t[-end end_time_in_usec]\n\t[-mtu MTU]\n\t[-s x] to set dragonfly+ parameters\n\t[-l x] to set dragonfly+ parameters\n\t[-h x] to set dragonfly+ parameters\n\t[-p x] to set dragonfly+ parameters\n\t[-hop_latency x] per hop wire latency in us,default 1\n\t[-switch_latency x] switching latency in us, default 0\n\t[-start_delta] time in us to randomly delay the start of connections\n\t[-pfc_thresholds low high]" << endl;
+#else
+    cout << "Usage " << progr << " [-nodes N]\n\t[-q queue_size]\n\t[-queue_type composite|random|lossless|lossless_input|]\n\t[-tm traffic_matrix_file]\n\t[-strat route_strategy (single,\n\tecmp_host,ecmp_ar,\n\tecmp_host_ar ar_thresh)]\n\t[-log log_level]\n\t[-linkspeed linkspeed]\n\t[-seed random_seed]\n\t[-end end_time_in_usec]\n\t[-mtu MTU]\n\t[-hop_latency x] per hop wire latency in us,default 1\n\t[-switch_latency x] switching latency in us, default 0\n\t[-start_delta] time in us to randomly delay the start of connections\n\t[-pfc_thresholds low high]" << endl;
+#endif
     exit(1);
 }
 
@@ -59,6 +65,7 @@ int main(int argc, char **argv) {
     uint32_t path_entropy_size = 10000000;
     uint32_t no_of_nodes = DEFAULT_NODES;
     uint32_t tiers = 3; // we support 2 and 3 tier fattrees     
+    uint32_t no_parallel_link = 1; //default 
     double logtime = 0.25; // ms;
     stringstream filename(ios_base::out);
     simtime_picosec hop_latency = timeFromUs((uint32_t)1);
@@ -71,6 +78,14 @@ int main(int argc, char **argv) {
     int ecn_threshold = 0;
 
     queue_type snd_type = FAIR_PRIO;
+#ifdef DRAGONFLY_PLUS
+    topology_type topo_type = LARGE;
+    uint32_t k_radix = 2; //default router radix, min radix
+    uint32_t s_df = 0;
+    uint32_t l_df = 0;
+    uint32_t h_df = 0;
+    uint32_t p_df = 0;
+#endif
 
     uint64_t high_pfc = 15, low_pfc = 12;
 
@@ -83,17 +98,48 @@ int main(int argc, char **argv) {
     RouteStrategy route_strategy = NOT_SET;
     int seed = 13;
     int i = 1;
+#ifdef FAT_TREE
     uint32_t topo_num_failed = 0;
+#endif
     filename << "logout.dat";
     int end_time = 1000;//in microseconds
 
     char* tm_file = NULL;
     char* topo_file = NULL;
+    uint64_t queue_size_threshold = 0;
 
     while (i<argc) {
         if (!strcmp(argv[i],"-o")) {
             filename.str(std::string());
             filename << argv[i+1];
+            i++;
+        } 
+#ifdef DRAGONFLY_PLUS
+        else if (!strcmp(argv[i],"-radix")) {
+            k_radix = atoi(argv[i+1]);
+            cout << "rotuer radix "<< k_radix << endl;
+            i++;
+        } else if (!strcmp(argv[i],"-size")) {
+            if (!strcmp(argv[i+1],"s")){
+                topo_type = SMALL;
+            } else if (!strcmp(argv[i+1],"m")){
+                topo_type = MEDIUM;
+            } else if (!strcmp(argv[i+1],"l")){
+                topo_type = LARGE;
+            } else {
+                cout << "Unknown topology size " << argv[i+1] << endl;
+                exit_error(argv[0]);
+            }
+            i++;
+        } 
+#endif
+        else if (!strcmp(argv[i],"-p_link")) {
+            no_parallel_link = atoi(argv[i+1]);
+            cout << "number of parallel link "<< no_parallel_link << endl;
+            i++;
+        } else if (!strcmp(argv[i],"-threshold")) {
+            queue_size_threshold = atoi(argv[i+1]);
+            cout << "queue size threshold "<< queue_size_threshold << endl;
             i++;
         } else if (!strcmp(argv[i],"-end")) {
             end_time = atoi(argv[i+1]);
@@ -108,11 +154,15 @@ int main(int argc, char **argv) {
             ecn_threshold = atoi (argv[i+1]);
             cout << "dcqcn ecn threshold "<< ecn_threshold << endl;
             i++;
-        } else if (!strcmp(argv[i],"-failed")){
+        } 
+#ifdef FAT_TREE
+        else if (!strcmp(argv[i],"-failed")){
             // number of failed links (failed to 25% linkspeed)
             topo_num_failed = atoi(argv[i+1]);
             i++;
-        } else if (!strcmp(argv[i],"-tiers")) {
+        } 
+#endif
+        else if (!strcmp(argv[i],"-tiers")) {
             tiers = atoi(argv[i+1]);
             cout << "tiers "<< tiers << endl;
             assert(tiers == 2 || tiers == 3);
@@ -183,12 +233,28 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i],"-topo")){
             topo_file = argv[i+1];
-            cout << "FatTree topology input file: "<< topo_file << endl;
+            cout << "Topology input file: "<< topo_file << endl;
             i++;
         } else if (!strcmp(argv[i],"-q")){
             queuesize = atoi(argv[i+1]);
             i++;
-        } else if (!strcmp(argv[i],"-logtime")){
+        } 
+#ifdef DRAGONFLY_PLUS
+        else if (!strcmp(argv[i],"-s")){
+            s_df = atoi(argv[i+1]);
+            i++;
+        } else if (!strcmp(argv[i],"-l")){
+            l_df = atoi(argv[i+1]);
+            i++;
+        } else if (!strcmp(argv[i],"-h")){
+            h_df = atoi(argv[i+1]);
+            i++;
+        } else if (!strcmp(argv[i],"-p")){
+            p_df = atoi(argv[i+1]);
+            i++;
+        } 
+#endif
+        else if (!strcmp(argv[i],"-logtime")){
             logtime = atof(argv[i+1]);            
             cout << "logtime "<< logtime << " ms" << endl;
             i++;
@@ -217,7 +283,7 @@ int main(int argc, char **argv) {
 
         } else if (!strcmp(argv[i],"-switch_latency")){
             switch_latency = timeFromUs(atof(argv[i+1]));
-            cout << "Switch latency set to " << timeAsUs(hop_latency) << endl;
+            cout << "Switch latency set to " << timeAsUs(switch_latency) << endl;
             i++;
         } else if (!strcmp(argv[i],"-start_delta")){
             start_delta = atof(argv[i+1]);
@@ -276,6 +342,7 @@ int main(int argc, char **argv) {
             }
             i++;
         }  else if (!strcmp(argv[i],"-strat")){
+#ifdef FAT_TREE
             if (!strcmp(argv[i+1], "perm")) {
                 route_strategy = SCATTER_PERMUTE;
             } else if (!strcmp(argv[i+1], "rand")) {
@@ -303,6 +370,17 @@ int main(int argc, char **argv) {
                 route_strategy = ECMP_FIB;
                 path_entropy_size = 1;
                 FatTreeSwitch::set_strategy(FatTreeSwitch::RR);
+#elif defined DRAGONFLY_PLUS                
+            if (!strcmp(argv[i+1], "fpar")) {
+                route_strategy = FPAR;
+                DragonflyPlusSwitch::set_strategy(DragonflyPlusSwitch::FPAR);
+            } else if (!strcmp(argv[i+1], "minimal")) {
+                route_strategy = MINIMAL;
+                DragonflyPlusSwitch::set_strategy(DragonflyPlusSwitch::MINIMAL);
+#endif
+            }else{
+                cout << "Unknown strategy " << argv[i+1] << endl;
+                exit_error(argv[0]);                
             }
             i++;
         } else {
@@ -337,9 +415,20 @@ int main(int argc, char **argv) {
 
     eventlist.setEndtime(timeFromUs((uint32_t)end_time));
     queuesize = memFromPkt(queuesize);
+
+#ifdef DRAGONFLY_PLUS
+    if (topo_type!=SMALL){
+        if(no_parallel_link != 1){
+            fprintf(stderr, "It is not possible to change the number of parallel links if the Dragonfly+ Topology is not small\n");
+            exit(1);
+        }
+    }
+#endif
     
     switch (route_strategy) {
+#ifdef FAT_TREE
     case ECMP_FIB:
+        break;
     case SCATTER_ECMP:
         if (path_entropy_size > 10000) {
             fprintf(stderr, "Route Strategy is ECMP.  Must specify path count using -paths\n");
@@ -352,6 +441,12 @@ int main(int argc, char **argv) {
             exit(1);
         }
         break;
+#endif
+#ifdef DRAGONFLY_PLUS
+    case FPAR:
+    case MINIMAL:
+        break;
+#endif
     case NOT_SET:
         fprintf(stderr, "Route Strategy not set.  Use the -strat param.  \nValid values are perm, rand, pull, rg and single\n");
         exit(1);
@@ -381,8 +476,6 @@ int main(int argc, char **argv) {
     RoceSrc* roceSrc;
     RoceSink* roceSnk;
 
-    Route* routeout, *routein;
-
     QueueLoggerFactory *qlf = 0;
     if (log_tor_downqueue || log_tor_upqueue) {
         qlf = new QueueLoggerFactory(&logfile, QueueLoggerFactory::LOGGER_SAMPLING, eventlist);
@@ -391,6 +484,7 @@ int main(int argc, char **argv) {
         qlf = new QueueLoggerFactory(&logfile, QueueLoggerFactory::LOGGER_EMPTY, eventlist);
         qlf->set_sample_period(timeFromUs(10.0));
     }
+
 #ifdef FAT_TREE
     unique_ptr<FatTreeTopology> top;
     unique_ptr<FatTreeTopologyCfg> topo_cfg;
@@ -433,6 +527,17 @@ int main(int argc, char **argv) {
 
 #ifdef VL2
     VL2Topology* top = new VL2Topology(lf, &eventlist,ff);
+#endif
+
+#ifdef DRAGONFLY_PLUS
+    DragonflyPlusTopology* top;
+    if (topo_file) {
+        top = DragonflyPlusTopology::load(topo_file, qlf, eventlist, queuesize, qt);
+    } else {
+        top = new DragonflyPlusTopology(k_radix,s_df, l_df, h_df, p_df, no_of_nodes, qt, queuesize, qlf, 
+                                        &eventlist, topo_type, queue_size_threshold, no_parallel_link, 
+                                        linkspeed, hop_latency, switch_latency);
+    }
 #endif
 
     if (log_switches) {
@@ -489,20 +594,22 @@ int main(int argc, char **argv) {
         int dest = crt->dst;
         path_refcounts[src][dest]++;
         path_refcounts[dest][src]++;
-                        
+        
+#ifndef DRAGONFLY_PLUS
         if (!net_paths[src][dest]&&route_strategy!=ECMP_FIB) {
             vector<const Route*>* paths = top->get_bidir_paths(src,dest,false);
             net_paths[src][dest] = paths;
             /*
-              for (unsigned int i = 0; i < paths->size(); i++) {
-              routes.push_back((*paths)[i]);
-              }
+            for (unsigned int i = 0; i < paths->size(); i++) {
+            routes.push_back((*paths)[i]);
+            }
             */
         }
         if (!net_paths[dest][src]&&route_strategy!=ECMP_FIB) {
             vector<const Route*>* paths = top->get_bidir_paths(dest,src,false);
             net_paths[dest][src] = paths;
-        }
+        }        
+#endif
     }
 
     map <flowid_t, TriggerTarget*> flowmap;
@@ -520,6 +627,7 @@ int main(int argc, char **argv) {
 
         roce_srcs.push_back(roceSrc);
         roceSrc->set_dst(dest);
+            roceSrc->set_src(src);
                         
         if (crt->size>0){
             roceSrc->set_flowsize(crt->size);
@@ -551,47 +659,78 @@ int main(int argc, char **argv) {
         logfile.writeName(*roceSrc);
 
         roceSnk->set_src(src);
+            roceSnk->set_dst(dest);
                         
         roceSnk->setName("Roce_sink_" + ntoa(src) + "_" + ntoa(dest));
         logfile.writeName(*roceSnk);
-                        
-        ((HostQueue*)top->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0])->addHostSender(roceSrc);
+	
+#ifdef DRAGONFLY_PLUS
+            ((HostQueue*)top->queues_host_leaf[src][top->get_host_switch(src)])->addHostSender(roceSrc);
+            if (route_strategy!=MINIMAL && route_strategy!=FPAR){
+                abort();
+            } else {
+                Route* srctotor = new Route();
+                srctotor->push_back(top->queues_host_leaf[src][top->get_host_switch(src)]);
+                srctotor->push_back(top->pipes_host_leaf[src][top->get_host_switch(src)]);
+                srctotor->push_back(top->queues_host_leaf[src][top->get_host_switch(src)]->getRemoteEndpoint());
 
-        if (route_strategy!=SINGLE_PATH && route_strategy!=ECMP_FIB){
-            abort();
-        } else if (route_strategy==ECMP_FIB) {
-            Route* srctotor = new Route();
-            
-            srctotor->push_back(top->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
-            srctotor->push_back(top->pipes_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
-            srctotor->push_back(top->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]->getRemoteEndpoint());
+                Route* dsttotor = new Route();
+                dsttotor->push_back(top->queues_host_leaf[dest][top->get_host_switch(dest)]);
+                dsttotor->push_back(top->pipes_host_leaf[dest][top->get_host_switch(dest)]);
+                dsttotor->push_back(top->queues_host_leaf[dest][top->get_host_switch(dest)]->getRemoteEndpoint());
 
-            Route* dsttotor = new Route();
-            dsttotor->push_back(top->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
-            dsttotor->push_back(top->pipes_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
-            dsttotor->push_back(top->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]->getRemoteEndpoint());
+                if (crt->start != TRIGGER_START && start_delta > 0){
+                    crt->start += timeFromUs(drand48()*start_delta);
+                    cout << "Start is " << timeAsUs(crt->start) << endl;
+                }
 
-
-            if (crt->start != TRIGGER_START && start_delta > 0){
-                crt->start += timeFromUs(drand48()*start_delta);
-                cout << "Start is " << timeAsUs(crt->start) << endl;
+                roceSrc->connect(srctotor, dsttotor, *roceSnk, crt->start);
+                //register src and snk to receive packets from their respective TORs. 
+                assert(top->switches_lf[top->get_host_switch(src)]);
+                assert(top->switches_lf[top->get_host_switch(src)]);
+                top->switches_lf[top->get_host_switch(src)]->addHostPort(src,roceSrc->flow_id(),roceSrc);
+                top->switches_lf[top->get_host_switch(dest)]->addHostPort(dest,roceSrc->flow_id(),roceSnk);
             }
-            roceSrc->connect(srctotor, dsttotor, *roceSnk, crt->start);
+#elif defined FAT_TREE                        
+		((HostQueue*)top->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0])->addHostSender(roceSrc);
 
-            //register src and snk to receive packets from their respective TORs. 
-            assert(top->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
-            assert(top->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
-            top->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]->addHostPort(src,roceSrc->flow_id(),roceSrc);
-            top->switches_lp[topo_cfg->HOST_POD_SWITCH(dest)]->addHostPort(dest,roceSrc->flow_id(),roceSnk);
-        } else {
-            int choice = rand()%net_paths[src][dest]->size();
-            routeout = new Route(*(net_paths[src][dest]->at(choice)));
-            routeout->add_endpoints(roceSrc, roceSnk);
-                                
-            routein = new Route(*top->get_bidir_paths(dest,src,false)->at(choice));
-            routein->add_endpoints(roceSnk, roceSrc);
-            roceSrc->connect(routeout, routein, *roceSnk, timeFromUs((uint32_t)rand()%20));
-        }
+		if (route_strategy!=SINGLE_PATH && route_strategy!=ECMP_FIB){
+		    abort();
+		} else if (route_strategy==ECMP_FIB) {
+		    Route* srctotor = new Route();
+		    
+		    srctotor->push_back(top->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
+		    srctotor->push_back(top->pipes_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
+		    srctotor->push_back(top->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]->getRemoteEndpoint());
+
+		    Route* dsttotor = new Route();
+		    dsttotor->push_back(top->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
+		    dsttotor->push_back(top->pipes_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
+		    dsttotor->push_back(top->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]->getRemoteEndpoint());
+
+
+		    if (crt->start != TRIGGER_START && start_delta > 0){
+		        crt->start += timeFromUs(drand48()*start_delta);
+		        cout << "Start is " << timeAsUs(crt->start) << endl;
+		    }
+		    roceSrc->connect(srctotor, dsttotor, *roceSnk, crt->start);
+
+		    //register src and snk to receive packets from their respective TORs. 
+		    assert(top->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
+		    assert(top->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
+		    top->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]->addHostPort(src,roceSrc->flow_id(),roceSrc);
+		    top->switches_lp[topo_cfg->HOST_POD_SWITCH(dest)]->addHostPort(dest,roceSrc->flow_id(),roceSnk);
+		} else {
+            Route* routeout, *routein;
+		    int choice = rand()%net_paths[src][dest]->size();
+		    routeout = new Route(*(net_paths[src][dest]->at(choice)));
+		    routeout->add_endpoints(roceSrc, roceSnk);
+		                        
+		    routein = new Route(*top->get_bidir_paths(dest,src,false)->at(choice));
+		    routein->add_endpoints(roceSnk, roceSrc);
+		    roceSrc->connect(routeout, routein, *roceSnk, timeFromUs((uint32_t)rand()%20));
+		}
+#endif
 
         path_refcounts[src][dest]--;
         path_refcounts[dest][src]--;

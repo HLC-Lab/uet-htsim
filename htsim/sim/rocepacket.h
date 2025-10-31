@@ -23,7 +23,7 @@ class RocePacket : public Packet {
                                     seq_t seqno, int size, 
                                     bool retransmitted, 
                                     bool last_packet,
-                                    uint32_t destination = UINT32_MAX) {
+                                    uint32_t destination = UINT32_MAX, uint32_t source = UINT32_MAX) {
                 RocePacket* p = _packetdb.allocPacket();
                 p->set_attrs(flow, size+ACKSIZE, seqno+size-1); // The NDP sequence number is the first byte of the packet; I will ID the packet by its last byte.
                 p->_type = ROCE;
@@ -34,6 +34,7 @@ class RocePacket : public Packet {
                 p->_path_len = 0;
                 p->_direction = NONE;
                 p->set_dst(destination);
+                p->set_src(source);
                 return p;
     }
   
@@ -41,7 +42,7 @@ class RocePacket : public Packet {
                                     seq_t seqno, int size, 
                                     bool retransmitted,
                                     bool last_packet,
-                                    uint32_t destination = UINT32_MAX) {
+                                    uint32_t destination = UINT32_MAX, uint32_t source = UINT32_MAX) {
                 RocePacket* p = _packetdb.allocPacket();
                 p->set_route(flow,route,size+ACKSIZE,seqno+size-1); // The NDP sequence number is the first byte of the packet; I will ID the packet by its last byte.
                 p->_type = ROCE;
@@ -52,6 +53,7 @@ class RocePacket : public Packet {
                 p->_last_packet = last_packet;
                 p->_path_len = route.size();
                 p->set_dst(destination);
+                p->set_src(source);
                 return p;
     }
   
@@ -80,7 +82,7 @@ class RoceAck : public Packet {
   
     inline static RoceAck* newpkt(PacketFlow &flow, const Route &route, 
                                  seq_t ackno,
-                                 uint32_t destination = UINT32_MAX) {
+                                 uint32_t destination = UINT32_MAX, uint32_t source = UINT32_MAX) {
                 RoceAck* p = _packetdb.allocPacket();
                 p->set_route(flow,route,RocePacket::ACKSIZE,ackno);
                 p->_type = ROCEACK;
@@ -89,6 +91,7 @@ class RoceAck : public Packet {
                 p->_path_len = 0;
                 p->_direction = NONE;
                 p->set_dst(destination);
+                p->set_src(source);
                 return p;
     }
   
@@ -113,7 +116,7 @@ class RoceNack : public Packet {
   
     inline static RoceNack* newpkt(PacketFlow &flow, const Route &route, 
                                   seq_t ackno,
-                                  uint32_t destination = UINT32_MAX) {
+                                  uint32_t destination = UINT32_MAX, uint32_t source = UINT32_MAX) {
                 RoceNack* p = _packetdb.allocPacket();
                 p->set_route(flow,route,RocePacket::ACKSIZE,ackno);
                 p->_type = ROCENACK;
@@ -121,6 +124,7 @@ class RoceNack : public Packet {
                 p->_ackno = ackno;
                 p->_direction = NONE;
                 p->set_dst(destination);
+                p->set_src(source);
                 return p;
     }
   

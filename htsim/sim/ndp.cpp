@@ -206,6 +206,8 @@ void NdpSrc::set_paths(vector<const Route*>* rt_list){
     case ECMP_FIB:
     case ECMP_FIB_ECN:
     case REACTIVE_ECN:
+    case MINIMAL:
+    case FPAR:
         // shouldn't call this with these strategies
         abort();
     case SCATTER_PERMUTE:
@@ -554,7 +556,9 @@ void NdpSrc::processNack(const NdpNack& nack){
                     _path_ids.size(), last_packet,_dstaddr);
         p->set_pathid(_path_ids[next_route()]);
         break;
-    }        
+    }
+    case MINIMAL:
+    case FPAR:
     case NOT_SET:
         abort();
     }
@@ -835,6 +839,8 @@ int NdpSrc::choose_route() {
         abort();  //not sure if this can ever happen - if it can, remove this line
     case REACTIVE_ECN:
         return _crt_path;
+    case MINIMAL:
+    case FPAR:
     case NOT_SET:
         abort();  // shouldn't be here at all
     }        
@@ -979,6 +985,8 @@ int NdpSrc::send_packet(NdpPull::seq_t pacer_no) {
                                   _mss, false, 1,
                                   last_packet,_dstaddr);
             break;
+        case MINIMAL:
+        case FPAR:
         case NOT_SET:
             abort();
         }
@@ -1112,6 +1120,8 @@ NdpSrc::retransmit_packet() {
             p = NdpPacket::newpkt(_flow, *_route, seqno, 0, _mss, true,
                                   _paths.size(), last_packet,_dstaddr);
             break;
+        case MINIMAL:
+        case FPAR:
         case NOT_SET:
             abort();
         }
@@ -1348,6 +1358,8 @@ void NdpSink::set_paths(vector<const Route*>* rt_list){
     case ECMP_FIB:
     case ECMP_FIB_ECN:
     case REACTIVE_ECN:
+    case MINIMAL:
+    case FPAR:
     case NOT_SET:
         abort();
     }
@@ -1360,6 +1372,8 @@ void NdpSink::set_paths(uint32_t no_of_paths){
     case PULL_BASED:
     case SCATTER_ECMP:
     case SINGLE_PATH:
+    case MINIMAL:
+    case FPAR:
     case NOT_SET:
         abort();
 
@@ -1708,6 +1722,8 @@ void NdpSink::send_ack(simtime_picosec ts, NdpPacket::seq_t ackno,
         ack = NdpAck::newpkt(_src->_flow, *_route, 0, ackno, _cumulative_ack,
                              _pull_no, 0,_srcaddr);// _path_history[_path_hist_index].path_id());
             break;
+    case MINIMAL:
+    case FPAR:
     case NOT_SET:
             abort();
     }
@@ -1771,6 +1787,8 @@ void NdpSink::send_nack(simtime_picosec ts, NdpPacket::seq_t ackno, NdpPacket::s
     case SINGLE_PATH:
         nack = NdpNack::newpkt(_src->_flow, *_route, 0, ackno, _cumulative_ack,  _pull_no, 0, _srcaddr );//_path_history[_path_hist_index].path_id());
         break;
+    case MINIMAL:
+    case FPAR:
     case NOT_SET:
         abort();
     }

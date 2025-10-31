@@ -12,6 +12,8 @@ set(LIB_SOURCES
     fat_tree_switch.cpp
     dragon_fly_topology.cpp
     generic_topology.cpp
+    dragonfly_plus_topology.cpp
+    dragonfly_plus_switch.cpp
 )
 
 # Create static library

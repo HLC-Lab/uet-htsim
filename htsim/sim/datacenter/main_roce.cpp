@@ -567,8 +567,10 @@ int main(int argc, char **argv) {
     if (tm_file){
         cout << "Loading connection matrix from  " << tm_file << endl;
 
-        if (!conns->load(tm_file))
+        if (!conns->load(tm_file)){
+            cout << "Error while loading connection matrix." << endl;
             exit(-1);
+        }
     }
     else {
         cout << "Loading connection matrix from  standard input" << endl;        

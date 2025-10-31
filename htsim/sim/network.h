@@ -143,12 +143,15 @@ class Packet {
     virtual void go_down(){ if (_direction == UP) _direction = DOWN; else if (_direction == NONE) abort();}
     virtual void set_direction(packet_direction d){ 
         if (d==_direction) return; 
+        _direction = d; 
+        /*
         if ((_direction == NONE) || (_direction == UP && d==DOWN)) 
             _direction = d; 
         else {
             cout << "Current direction is " << _direction << " trying to change it to " << d << endl;
             abort();
         }
+        */
     }
 
     virtual void set_channel(uint32_t vc){ 

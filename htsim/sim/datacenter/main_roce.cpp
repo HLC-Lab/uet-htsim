@@ -22,10 +22,15 @@
 #include "firstfit.h"
 #include "topology.h"
 #include "connection_matrix.h"
-//#include "fat_tree_topology.h"
-//#include "fat_tree_switch.h"
+
+#ifdef DRAGONFLY_PLUS
 #include "dragonfly_plus_topology.h"
 #include "dragonfly_plus_switch.h"
+#else
+#include "fat_tree_topology.h"
+#include "fat_tree_switch.h"
+#endif
+
 
 #include <list>
 
@@ -71,13 +76,14 @@ int main(int argc, char **argv) {
     simtime_picosec hop_latency = timeFromUs((uint32_t)1);
     simtime_picosec switch_latency = timeFromUs((uint32_t)0);
     simtime_picosec start_delta = 0;
+
     queue_type qt = LOSSLESS_INPUT;
+    queue_type snd_type = FAIR_PRIO;
     float ar_sticky_delta = 10;
 
     bool dcqcn = false;
     int ecn_threshold = 0;
-
-    queue_type snd_type = FAIR_PRIO;
+  
 #ifdef DRAGONFLY_PLUS
     topology_type topo_type = LARGE;
     uint32_t k_radix = 2; //default router radix, min radix

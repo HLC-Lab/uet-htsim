@@ -1,6 +1,6 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*-
-#ifndef DRAGONFLY_PLUS
-#define DRAGONFLY_PLUS
+#ifndef DRAGONFLY_PLUS_TOPOLOGY_H
+#define DRAGONFLY_PLUS_TOPOLOGY_H
 #include <ostream>
 #include <unordered_map>
 #include "config.h"

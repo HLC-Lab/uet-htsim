@@ -31,8 +31,16 @@ set_property(TARGET htsim_tcp PROPERTY EXCLUDE_FROM_ALL TRUE)
 add_executable(htsim_ndp main_ndp.cpp)
 set_property(TARGET htsim_ndp PROPERTY EXCLUDE_FROM_ALL TRUE)
 
-add_executable(htsim_roce main_roce.cpp)
-set_property(TARGET htsim_roce PROPERTY EXCLUDE_FROM_ALL TRUE)
+# Standard build (no DRAGONFLY_PLUS)
+add_executable(htsim_roce_ft main_roce.cpp)
+set_property(TARGET htsim_roce_ft PROPERTY EXCLUDE_FROM_ALL TRUE)
+set_target_properties(htsim_roce_ft PROPERTIES OUTPUT_NAME "htsim_roce_ft")
+
+# Dragonfly+ build (DRAGONFLY_PLUS defined)
+add_executable(htsim_roce_dfp main_roce.cpp)
+set_property(TARGET htsim_roce_dfp PROPERTY EXCLUDE_FROM_ALL TRUE)
+target_compile_definitions(htsim_roce_dfp PRIVATE DRAGONFLY_PLUS)
+set_target_properties(htsim_roce_dfp PROPERTIES OUTPUT_NAME "htsim_roce_dfp")
 
 add_executable(htsim_swift main_swift.cpp)
 set_property(TARGET htsim_swift PROPERTY EXCLUDE_FROM_ALL TRUE)
@@ -51,7 +59,8 @@ add_executable(htsim_uec main_uec.cpp)
 set (ALL_EXECUTABLES
     htsim_tcp
     htsim_ndp
-    htsim_roce
+    htsim_roce_ft
+    htsim_roce_dfp
     htsim_swift
     htsim_hpcc
     htsim_eqds

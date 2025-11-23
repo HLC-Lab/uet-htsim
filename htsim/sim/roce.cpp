@@ -205,7 +205,7 @@ void RoceSrc::processAck(const RoceAck& ack) {
         cout << "Src " << get_id() << " ackno " << ackno << endl;
 
     if (ackno * _mss >= _flow_size){
-        cout << "Flow " << _name << " " << get_id() << " finished at " << timeAsUs(eventlist().now()) << " total bytes " << ackno << endl;
+        cout << "Flow " << _name << " " << get_id() << " finished at " << timeAsUs(eventlist().now()) << " total bytes " << ackno << " flow size " << _flow_size << endl;
         _done = true;
         if (_end_trigger) {
             _end_trigger->activate();
@@ -326,7 +326,7 @@ void RoceSrc::doNextEvent() {
         return;
     }
 
-    if (_flow_size && _highest_sent >= _flow_size) { 
+    if (_flow_size && _highest_sent*_mss >= _flow_size) { 
         if (_log_me) 
             cout << "Src " << get_id()  << " stopping send coz highest_sent is " << _highest_sent << endl;
         return;
@@ -336,10 +336,9 @@ void RoceSrc::doNextEvent() {
         send_packet();
         _time_last_sent = eventlist().now();
     }
-
+    
     simtime_picosec next_send = _time_last_sent + _packet_spacing;
     assert(next_send > eventlist().now());
-
     eventlist().sourceIsPending(*this, next_send);
 }
 
@@ -424,7 +423,7 @@ void RoceSink::receivePacket(Packet& pkt) {
         }
 
         if (!_nack_sent){
-            send_nack(ts,_cumulative_ack);  
+            send_nack(ts, _cumulative_ack);  
             _nack_sent = true;
             cout << "Wrong seqno received at Roce SINK " << seqno << " expecting " << _cumulative_ack << endl;
         }
@@ -434,7 +433,7 @@ void RoceSink::receivePacket(Packet& pkt) {
         return;
     }
 
-    if (seqno == _cumulative_ack+1) { // it's the next expected seq no
+    if (seqno == _cumulative_ack + 1) { // it's the next expected seq no
         _cumulative_ack = seqno;
 
         if (ooo_enabled){
@@ -462,7 +461,7 @@ void RoceSink::receivePacket(Packet& pkt) {
 
 void RoceSink::send_ack(simtime_picosec ts) {
     RoceAck *ack = 0;
-    ack = RoceAck::newpkt(_src->_flow, *_route, _cumulative_ack,_srcaddr,_dstaddr);
+    ack = RoceAck::newpkt(_src->_flow, *_route, _cumulative_ack, _srcaddr, _dstaddr);
     if (_log_me)
         cout << "Sink " << get_id() << " sending ack " << _cumulative_ack << endl;
     ack->set_pathid(0);
@@ -471,7 +470,7 @@ void RoceSink::send_ack(simtime_picosec ts) {
 
 void RoceSink::send_nack(simtime_picosec ts, RocePacket::seq_t ackno) {
     RoceNack *nack = NULL;
-    nack = RoceNack::newpkt(_src->_flow, *_route, ackno,_srcaddr,_dstaddr);
+    nack = RoceNack::newpkt(_src->_flow, *_route, ackno, _srcaddr, _dstaddr);
     if (_log_me)
         cout << "Sink " << get_id() << " sending nack " << ackno << endl;
 

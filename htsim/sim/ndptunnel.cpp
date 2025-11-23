@@ -107,6 +107,8 @@ void NdpTunnelSrc::set_paths(vector<const Route*>* rt_list){
     case ECMP_FIB:
     case ECMP_FIB_ECN:
     case REACTIVE_ECN:
+    case MINIMAL:
+    case FPAR:
         // shouldn't call this with these strategies
         abort();
     case SCATTER_PERMUTE:
@@ -427,6 +429,8 @@ const Route* NdpTunnelSrc::choose_route() {
     case ECMP_FIB:
     case ECMP_FIB_ECN:
     case REACTIVE_ECN:
+    case MINIMAL:
+    case FPAR:
         abort();  
     case NOT_SET:
         abort();  // shouldn't be here at all
@@ -511,6 +515,8 @@ int NdpTunnelSrc::send_packet(NdpPull::seq_t pacer_no) {
         case ECMP_FIB:
         case ECMP_FIB_ECN:
         case REACTIVE_ECN:
+        case MINIMAL:
+        case FPAR:
             abort();
         }
         assert(p);
@@ -806,6 +812,8 @@ void NdpTunnelSink::set_paths(vector<const Route*>* rt_list){
     case ECMP_FIB:
     case ECMP_FIB_ECN:
     case REACTIVE_ECN:
+    case MINIMAL:
+    case FPAR:
         abort();
     }
 }
@@ -951,6 +959,8 @@ void NdpTunnelSink::send_ack(simtime_picosec ts, NdpTunnelPacket::seq_t ackno, N
     case ECMP_FIB:
     case ECMP_FIB_ECN:
     case REACTIVE_ECN:
+    case MINIMAL:
+    case FPAR:
         abort();
     }
 
@@ -989,6 +999,8 @@ void NdpTunnelSink::send_nack(simtime_picosec ts, NdpTunnelPacket::seq_t ackno, 
     case ECMP_FIB:
     case ECMP_FIB_ECN:
     case REACTIVE_ECN:
+    case MINIMAL:
+    case FPAR:
       abort();
     }
     nack->flow().logTraffic(*nack,*this,TrafficLogger::PKT_CREATE);

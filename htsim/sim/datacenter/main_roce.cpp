@@ -629,13 +629,13 @@ int main(int argc, char **argv) {
         cout << "Connection " << crt->src << "->" <<crt->dst << " starting at " << timeAsUs(crt->start) << " size " << crt->size << endl;
 
         if (dcqcn)
-            roceSrc = new DCQCNSrc(NULL, NULL, eventlist,linkspeed);
+            roceSrc = new DCQCNSrc(NULL, NULL, eventlist, linkspeed);
         else
-            roceSrc = new RoceSrc(NULL, NULL, eventlist,linkspeed);
+            roceSrc = new RoceSrc(NULL, NULL, eventlist, linkspeed);
 
         roce_srcs.push_back(roceSrc);
         roceSrc->set_dst(dest);
-            roceSrc->set_src(src);
+        roceSrc->set_src(src);
                         
         if (crt->size>0){
             roceSrc->set_flowsize(crt->size);
@@ -667,38 +667,38 @@ int main(int argc, char **argv) {
         logfile.writeName(*roceSrc);
 
         roceSnk->set_src(src);
-            roceSnk->set_dst(dest);
+        roceSnk->set_dst(dest);
                         
         roceSnk->setName("Roce_sink_" + ntoa(src) + "_" + ntoa(dest));
         logfile.writeName(*roceSnk);
 	
 #ifdef DRAGONFLY_PLUS
-            ((HostQueue*)top->queues_host_leaf[src][top->get_host_switch(src)])->addHostSender(roceSrc);
-            if (route_strategy!=MINIMAL && route_strategy!=FPAR){
-                abort();
-            } else {
-                Route* srctotor = new Route();
-                srctotor->push_back(top->queues_host_leaf[src][top->get_host_switch(src)]);
-                srctotor->push_back(top->pipes_host_leaf[src][top->get_host_switch(src)]);
-                srctotor->push_back(top->queues_host_leaf[src][top->get_host_switch(src)]->getRemoteEndpoint());
+        ((HostQueue*)top->queues_host_leaf[src][top->get_host_switch(src)])->addHostSender(roceSrc);
+        if (route_strategy!=MINIMAL && route_strategy!=FPAR){
+            abort();
+        } else {
+            Route* srctotor = new Route();
+            srctotor->push_back(top->queues_host_leaf[src][top->get_host_switch(src)]);
+            srctotor->push_back(top->pipes_host_leaf[src][top->get_host_switch(src)]);
+            srctotor->push_back(top->queues_host_leaf[src][top->get_host_switch(src)]->getRemoteEndpoint());
 
-                Route* dsttotor = new Route();
-                dsttotor->push_back(top->queues_host_leaf[dest][top->get_host_switch(dest)]);
-                dsttotor->push_back(top->pipes_host_leaf[dest][top->get_host_switch(dest)]);
-                dsttotor->push_back(top->queues_host_leaf[dest][top->get_host_switch(dest)]->getRemoteEndpoint());
+            Route* dsttotor = new Route();
+            dsttotor->push_back(top->queues_host_leaf[dest][top->get_host_switch(dest)]);
+            dsttotor->push_back(top->pipes_host_leaf[dest][top->get_host_switch(dest)]);
+            dsttotor->push_back(top->queues_host_leaf[dest][top->get_host_switch(dest)]->getRemoteEndpoint());
 
-                if (crt->start != TRIGGER_START && start_delta > 0){
-                    crt->start += timeFromUs(drand48()*start_delta);
-                    cout << "Start is " << timeAsUs(crt->start) << endl;
-                }
-
-                roceSrc->connect(srctotor, dsttotor, *roceSnk, crt->start);
-                //register src and snk to receive packets from their respective TORs. 
-                assert(top->switches_lf[top->get_host_switch(src)]);
-                assert(top->switches_lf[top->get_host_switch(src)]);
-                top->switches_lf[top->get_host_switch(src)]->addHostPort(src,roceSrc->flow_id(),roceSrc);
-                top->switches_lf[top->get_host_switch(dest)]->addHostPort(dest,roceSrc->flow_id(),roceSnk);
+            if (crt->start != TRIGGER_START && start_delta > 0){
+                crt->start += timeFromUs(drand48()*start_delta);
+                cout << "Start is " << timeAsUs(crt->start) << endl;
             }
+
+            roceSrc->connect(srctotor, dsttotor, *roceSnk, crt->start);
+            //register src and snk to receive packets from their respective TORs. 
+            assert(top->switches_lf[top->get_host_switch(src)]);
+            assert(top->switches_lf[top->get_host_switch(src)]);
+            top->switches_lf[top->get_host_switch(src)]->addHostPort(src,roceSrc->flow_id(),roceSrc);
+            top->switches_lf[top->get_host_switch(dest)]->addHostPort(dest,roceSrc->flow_id(),roceSnk);
+        }
 #elif defined FAT_TREE                        
 		((HostQueue*)top->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0])->addHostSender(roceSrc);
 

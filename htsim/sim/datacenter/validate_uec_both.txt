@@ -66,7 +66,7 @@ connection_matrices/perm_16n_16c_2MB.cm
 !Param -receiver_cc
 !Param -end 2000
 !Param -paths 128
-!tailFCT 210
+!tailFCT 239
 connection_matrices/perm_16n_16c_2MB.cm
 !Experiment Small permutation, single path.
 !Binary ./htsim_uec

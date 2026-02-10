@@ -566,7 +566,9 @@ int main(int argc, char **argv) {
         }
         break;
     case NOT_SET:
-        fprintf(stderr, "Route Strategy not set.  Use the -strat param.  \nValid values are perm, rand, pull, rg and single\n");
+        fprintf(stderr, "Route Strategy not set.  Use the -strat param.  \n"
+                        "Valid values are ecmp_host, rr_ecmp, ecmp_host_ecn, "
+                        "reactive_ecn, ecmp_ar, ecmp_host_ar, and ecmp_rr\n");
         exit(1);
     default:
         break;

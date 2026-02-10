@@ -232,7 +232,8 @@ int main(int argc, char **argv) {
                 load_balancing_algo = MIXED;
             }
             else {
-                cout << "Unknown load balancing algorithm of type " << argv[i+1] << ", expecting bitmap, reps or reps2" << endl;
+                cout << "Unknown load balancing algorithm of type " << argv[i+1]
+                     << ", expecting bitmap, reps, oblivious, or mixed" << endl;
                 exit_error(argv[0]);
             }
             cout << "Load balancing algorithm set to  "<< argv[i+1] << endl;

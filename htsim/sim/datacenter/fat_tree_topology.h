@@ -36,6 +36,7 @@ class FatTreeTopology;
 
 class FatTreeTopologyCfg {
 friend class FatTreeTopology;
+friend class IncTopology;
 friend std::ostream &operator<<(std::ostream &os, FatTreeTopologyCfg const &m);
 public:
     FatTreeTopologyCfg(queue_type q, queue_type snd);
@@ -163,7 +164,7 @@ public:
     simtime_picosec get_two_point_diameter_latency(int src, int dst);
 
     uint16_t get_diameter() {return _diameter;}
-private:
+protected:
     void initialize(uint32_t tiers, uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize,
                     simtime_picosec latency, simtime_picosec switch_latency, 
                     queue_type q, queue_type snd);
@@ -277,7 +278,7 @@ public:
     virtual void add_switch_loggers(Logfile& log, simtime_picosec sample_period); 
 
     const FatTreeTopologyCfg& cfg() { return *_cfg; };
-private:
+protected:
     const FatTreeTopologyCfg* _cfg;
     map<Queue*,int> _link_usage;
     int64_t find_lp_switch(Queue* queue);

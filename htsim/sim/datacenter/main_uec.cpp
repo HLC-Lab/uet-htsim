@@ -23,7 +23,9 @@
 #include "connection_matrix.h"
 #include "pciemodel.h"
 #include "oversubscribed_cc.h"
-
+#include "inc_topology.h"
+#include "uec_inc_src.h"
+#include "inc_switch.h"
 
 #include "fat_tree_topology.h"
 #include "fat_tree_switch.h"
@@ -716,9 +718,41 @@ int main(int argc, char **argv) {
     topo.resize(planes);
     for (uint32_t p = 0; p < planes; p++) {
         topo[p] = make_unique<FatTreeTopology>(topo_cfg.get(), qlf, &eventlist, nullptr);
-
+        
         if (log_switches) {
             topo[p]->add_switch_loggers(logfile, logtime);
+        }
+        // --- PATCH INC: Ripristiniamo i collegamenti diretti per l'aggregazione ---
+       FatTreeTopology* ft = topo[p].get();
+        
+        // 1. ToR <-> Aggregation
+        for (size_t tor = 0; tor < ft->switches_lp.size(); tor++) {
+            for (size_t agg = 0; agg < ft->switches_up.size(); agg++) {
+                // Da ToR ad Agg
+                if (ft->queues_nlp_nup[tor][agg].size() > 0 && ft->queues_nlp_nup[tor][agg][0]) {
+                    ft->queues_nlp_nup[tor][agg][0]->setRemoteEndpoint(ft->switches_up[agg]);
+                }
+                // Da Agg a ToR
+                if (ft->queues_nup_nlp[agg][tor].size() > 0 && ft->queues_nup_nlp[agg][tor][0]) {
+                    ft->queues_nup_nlp[agg][tor][0]->setRemoteEndpoint(ft->switches_lp[tor]);
+                }
+            }
+        }
+        
+        // 2. Aggregation <-> Core (solo se abbiamo 3 tier)
+        if (topo_cfg->get_tiers() == 3) {
+            for (size_t agg = 0; agg < ft->switches_up.size(); agg++) {
+                for (size_t core = 0; core < ft->switches_c.size(); core++) {
+                    // Da Agg a Core
+                    if (ft->queues_nup_nc[agg][core].size() > 0 && ft->queues_nup_nc[agg][core][0]) {
+                        ft->queues_nup_nc[agg][core][0]->setRemoteEndpoint(ft->switches_c[core]);
+                    }
+                    // Da Core ad Agg
+                    if (ft->queues_nc_nup[core][agg].size() > 0 && ft->queues_nc_nup[core][agg][0]) {
+                        ft->queues_nc_nup[core][agg][0]->setRemoteEndpoint(ft->switches_up[agg]);
+                    }
+                }
+            }
         }
     }
     cout << "network_max_unloaded_rtt " << timeAsUs(network_max_unloaded_rtt) << endl;
@@ -761,7 +795,7 @@ int main(int argc, char **argv) {
         if (UecSink::_oversubscribed_cc)
             oversubscribed_ccs.push_back(new OversubscribedCC(eventlist, pacer.get()));
 
-        auto &nic = nics.emplace_back(make_unique<UecNIC>(ix, eventlist,
+        auto &nic = nics.emplace_back(make_unique<UecIncNIC>(ix, eventlist,
                                                           linkspeed, ports));
         if (log_nic) {
             nic_logger->monitorNic(nic.get());
@@ -782,47 +816,33 @@ int main(int argc, char **argv) {
     }
 
     mem_b cwnd_b = cwnd*Packet::data_packet_size();
-    for (size_t c = 0; c < all_conns->size(); c++){
+    for (size_t c = 0; c < all_conns->size(); c++) {
         connection* crt = all_conns->at(c);
         int src = crt->src;
         int dest = crt->dst;
+        uint32_t u_dest = static_cast<uint32_t>(dest);
 
-        if (!conn_reuse and crt->msgid.has_value()) {
-            cout << "msg keyword can only be used when conn_reuse is enabled.\n";
-            abort();
-        }
-
-        assert(planes > 0);
-        simtime_picosec transmission_delay = (Packet::data_packet_size() * 8 / speedAsGbps(linkspeed) * topo_cfg->get_diameter() * 1000) 
-                                             + (UecBasePacket::get_ack_size() * 8 / speedAsGbps(linkspeed) * topo_cfg->get_diameter() * 1000);
-        simtime_picosec base_rtt_bw_two_points = 2*topo_cfg->get_two_point_diameter_latency(src, dest) + transmission_delay;
-
-        //cout << "Connection " << crt->src << "->" <<crt->dst << " starting at " << crt->start << " size " << crt->size << endl;
-
-        if (!conn_reuse 
-            || (crt->flowid and flowmap.find(crt->flowid) == flowmap.end())) {
+        if (!conn_reuse || (crt->flowid && flowmap.find(crt->flowid) == flowmap.end())) {
+            
             unique_ptr<UecMultipath> mp = nullptr;
-            if (load_balancing_algo == BITMAP){
-                mp = make_unique<UecMpBitmap>(path_entropy_size, UecSrc::_debug);
-            } else if (load_balancing_algo == REPS){
-                mp = make_unique<UecMpReps>(path_entropy_size, UecSrc::_debug, !disable_trim);
-            } else if (load_balancing_algo == REPS_LEGACY){
-                mp = make_unique<UecMpRepsLegacy>(path_entropy_size, UecSrc::_debug);
-            }else if (load_balancing_algo == OBLIVIOUS){
-                mp = make_unique<UecMpOblivious>(path_entropy_size, UecSrc::_debug);
-            } else if (load_balancing_algo == MIXED){
-                mp = make_unique<UecMpMixed>(path_entropy_size, UecSrc::_debug);
+            if (load_balancing_algo == BITMAP) mp = make_unique<UecMpBitmap>(path_entropy_size, UecSrc::_debug);
+            else if (load_balancing_algo == REPS) mp = make_unique<UecMpReps>(path_entropy_size, UecSrc::_debug, !disable_trim);
+            else if (load_balancing_algo == REPS_LEGACY) mp = make_unique<UecMpRepsLegacy>(path_entropy_size, UecSrc::_debug);
+            else if (load_balancing_algo == OBLIVIOUS) mp = make_unique<UecMpOblivious>(path_entropy_size, UecSrc::_debug);
+            else mp = make_unique<UecMpMixed>(path_entropy_size, UecSrc::_debug);
+
+            UecNIC* nic_to_use = (u_dest == UINT32_MAX) ? nics.at(src).get() : nics.at(dest).get();
+            UecPullPacer* pacer_to_use = (u_dest == UINT32_MAX) ? pacers[src].get() : pacers[dest].get();
+
+            // 1. Creazione Sorgente e Sink
+            if (u_dest == UINT32_MAX) {
+                uec_src = new UecIncSrc(traffic_logger, eventlist, std::move(mp), *nics.at(src), ports);
+                IncSwitch::add_job_participant(src);
             } else {
-                cout << "ERROR: Failed to set multipath algorithm, abort." << endl;
-                abort();
+                uec_src = new UecSrc(traffic_logger, eventlist, std::move(mp), *nics.at(src), ports);
             }
 
-            uec_src = new UecSrc(traffic_logger, eventlist, move(mp), *nics.at(src), ports);
-
-            if (crt->flowid) {
-                uec_src->setFlowId(crt->flowid);
-                assert(flowmap.find(crt->flowid) == flowmap.end()); // don't have dups
-            }
+            if (crt->flowid) uec_src->setFlowId(crt->flowid);
 
             if (conn_reuse) {
                 stringstream uec_src_dbg_tag;
@@ -833,99 +853,63 @@ int main(int argc, char **argv) {
             }
 
             if (receiver_driven)
-                uec_snk = new UecSink(NULL, pacers[dest].get(), *nics.at(dest),
-                                      ports);
-            else //each connection has its own pacer, so receiver driven mode does not kick in! 
-                uec_snk = new UecSink(NULL,linkspeed,1.1,UecBasePacket::unquantize(UecSink::_credit_per_pull),eventlist,*nics.at(dest), ports);
+                uec_snk = new UecSink(NULL, pacer_to_use, *nic_to_use, ports);
+            else 
+                uec_snk = new UecSink(NULL, linkspeed, 1.1, UecBasePacket::unquantize(UecSink::_credit_per_pull), eventlist, *nic_to_use, ports);
 
             flowmap[uec_src->flowId()] = { uec_src, uec_snk };
+            if (crt->flowid) uec_snk->setFlowId(crt->flowid);
 
-            if (crt->flowid) {
-                uec_snk->setFlowId(crt->flowid);
-            }
+            // 2. Calcolo RTT e inizializzazione CC
+            simtime_picosec transmission_delay = (Packet::data_packet_size() * 8 / speedAsGbps(linkspeed) * topo_cfg->get_diameter() * 1000) 
+                                               + (UecBasePacket::get_ack_size() * 8 / speedAsGbps(linkspeed) * topo_cfg->get_diameter() * 1000);
+            
+            uint32_t logical_dest = (u_dest == UINT32_MAX) ? (uint32_t)src : u_dest;
+            simtime_picosec base_rtt_bw_two_points = 2 * topo_cfg->get_two_point_diameter_latency(src, logical_dest) + transmission_delay;
+            simtime_picosec rtt_to_use = enable_accurate_base_rtt ? base_rtt_bw_two_points : network_max_unloaded_rtt;
 
-            // If cwnd is 0 initXXcc will set a sensible default value 
-            if (receiver_driven) {
-                // uec_src->setCwnd(cwnd*Packet::data_packet_size());
-                // uec_src->setMaxWnd(cwnd*Packet::data_packet_size());
-
-                if (enable_accurate_base_rtt) {
-                    uec_src->initRccc(cwnd_b, base_rtt_bw_two_points);
-                } else {
-                    uec_src->initRccc(cwnd_b, network_max_unloaded_rtt);
+            if (u_dest == UINT32_MAX) {
+                static_cast<UecIncSrc*>(uec_src)->initIncNscc(cwnd_b, rtt_to_use);
+                mem_b realistic_max = 10 * network_max_unloaded_rtt * (linkspeed / 8); 
+                uec_src->setMaxWnd(realistic_max);
+                uec_src->setCwnd(realistic_max);
+                if (uec_snk->pullPacer()) {
+                    uec_snk->pullPacer()->updatePullRate(UecPullPacer::PCIE, 2.0);
                 }
+            } else {
+                if (receiver_driven) uec_src->initRccc(cwnd_b, rtt_to_use);
+                if (sender_driven) uec_src->initNscc(cwnd_b, rtt_to_use);
             }
 
-            if (sender_driven) {
-                if (enable_accurate_base_rtt) {
-                    uec_src->initNscc(cwnd_b, base_rtt_bw_two_points);
-                } else {
-                    uec_src->initNscc(cwnd_b, network_max_unloaded_rtt);
-                }
-            }
+            // 3. Aggiunta alla rete e configurazione eventi
             uec_srcs.push_back(uec_src);
             uec_src->setDst(dest);
 
-            if (log_flow_events) {
-                uec_src->logFlowEvents(*event_logger);
-            }
+            if (log_flow_events) uec_src->logFlowEvents(*event_logger);
             
-
             uec_src->setName("Uec_" + ntoa(src) + "_" + ntoa(dest));
             logfile.writeName(*uec_src);
             uec_snk->setSrc(src);
 
-            if (UecSink::_model_pcie){
-                uec_snk->setPCIeModel(pcie_models[dest]);
-            }
-                            
-            if (UecSink::_oversubscribed_cc){
-                uec_snk->setOversubscribedCC(oversubscribed_ccs[dest]);
-            }
+            if (UecSink::_model_pcie) uec_snk->setPCIeModel(pcie_models[logical_dest]);
+            if (UecSink::_oversubscribed_cc) uec_snk->setOversubscribedCC(oversubscribed_ccs[logical_dest]);
 
             ((DataReceiver*)uec_snk)->setName("Uec_sink_" + ntoa(src) + "_" + ntoa(dest));
             logfile.writeName(*(DataReceiver*)uec_snk);
 
+            // LOGICA TRIGGER ORIGINALE
             if (!conn_reuse) {
-                if (crt->size>0){
-                    uec_src->setFlowsize(crt->size);
-                }
-
-                if (crt->trigger) {
-                    Trigger* trig = conns->getTrigger(crt->trigger, eventlist);
-                    trig->add_target(*uec_src);
-                }
-
-                if (crt->send_done_trigger) {
-                    Trigger* trig = conns->getTrigger(crt->send_done_trigger, eventlist);
-                    uec_src->setEndTrigger(*trig);
-                }
-
-                if (crt->recv_done_trigger) {
-                    Trigger* trig = conns->getTrigger(crt->recv_done_trigger, eventlist);
-                    uec_snk->setEndTrigger(*trig);
-                }
+                if (crt->size>0) uec_src->setFlowsize(crt->size);
+                if (crt->trigger) conns->getTrigger(crt->trigger, eventlist)->add_target(*uec_src);
+                if (crt->send_done_trigger) uec_src->setEndTrigger(*conns->getTrigger(crt->send_done_trigger, eventlist));
+                if (crt->recv_done_trigger) uec_snk->setEndTrigger(*conns->getTrigger(crt->recv_done_trigger, eventlist));
             } else {
-                assert(crt->size > 0);
-
                 optional<simtime_picosec> start_ts = {};
-                if (crt->start != TRIGGER_START) {
-                    start_ts.emplace(timeFromUs((uint32_t)crt->start));
-                } 
-
+                if (crt->start != TRIGGER_START) start_ts.emplace(timeFromUs((uint32_t)crt->start));
                 UecPdcSes* pdc = flow_pdc_map.find(crt->flowid)->second;
                 UecMsg* msg = pdc->enque(crt->size, start_ts, true);
-
-                if (crt->trigger) {
-                    Trigger* trig = conns->getTrigger(crt->trigger, eventlist);
-                    trig->add_target(*msg);
-                }
-
-                if (crt->send_done_trigger) {
-                    Trigger* trig = conns->getTrigger(crt->send_done_trigger, eventlist);
-                    msg->setTrigger(UecMsg::MsgStatus::SentLast, trig);
-                }
-
+                if (crt->trigger) conns->getTrigger(crt->trigger, eventlist)->add_target(*msg);
+                if (crt->send_done_trigger) msg->setTrigger(UecMsg::MsgStatus::SentLast, conns->getTrigger(crt->send_done_trigger, eventlist));
                 if (crt->recv_done_trigger) {
                     Trigger* trig = conns->getTrigger(crt->recv_done_trigger, eventlist);
                     uec_snk->setEndTrigger(*trig);
@@ -933,75 +917,43 @@ int main(int argc, char **argv) {
                 }
             }
 
-            //uec_snk->set_priority(crt->priority);
-                            
+            // 4. CABLAGGIO FINALE (Routing)
             for (uint32_t p = 0; p < planes; p++) {
-                switch (route_strategy) {
-                case ECMP_FIB:
-                case ECMP_FIB_ECN:
-                case REACTIVE_ECN:
-                    {
-                        Route* srctotor = new Route();
-                        srctotor->push_back(topo[p]->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
-                        srctotor->push_back(topo[p]->pipes_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
-                        srctotor->push_back(topo[p]->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]->getRemoteEndpoint());
+                Route* srctotor = new Route();
+                srctotor->push_back(topo[p]->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
+                srctotor->push_back(topo[p]->pipes_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
+                srctotor->push_back(topo[p]->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]->getRemoteEndpoint());
 
-                        Route* dsttotor = new Route();
-                        dsttotor->push_back(topo[p]->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
-                        dsttotor->push_back(topo[p]->pipes_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
-                        dsttotor->push_back(topo[p]->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]->getRemoteEndpoint());
+                Route* dsttotor = new Route();
+                dsttotor->push_back(topo[p]->queues_ns_nlp[logical_dest][topo_cfg->HOST_POD_SWITCH(logical_dest)][0]);
+                dsttotor->push_back(topo[p]->pipes_ns_nlp[logical_dest][topo_cfg->HOST_POD_SWITCH(logical_dest)][0]);
+                dsttotor->push_back(topo[p]->queues_ns_nlp[logical_dest][topo_cfg->HOST_POD_SWITCH(logical_dest)][0]->getRemoteEndpoint());
+                
+                uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk, crt->start);
 
-                        uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk, crt->start);
-                        //uec_src->setPaths(path_entropy_size);
-                        //uec_snk->setPaths(path_entropy_size);
-
-                        //register src and snk to receive packets from their respective TORs. 
-                        assert(topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
-                        assert(topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
-                        topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]->addHostPort(src,uec_snk->flowId(),uec_src->getPort(p));
-                        topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(dest)]->addHostPort(dest,uec_src->flowId(),uec_snk->getPort(p));
-                        break;
-                    }
-                default:
-                    abort();
+                topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]->addHostPort(src,uec_snk->flowId(),uec_src->getPort(p));
+                if (u_dest != UINT32_MAX) {
+                    // TRAFFICO NORMALE
+                    topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(dest)]->addHostPort(dest, uec_src->flowId(), uec_snk->getPort(p));
+                    topo[p]->queues_nlp_ns[topo_cfg->HOST_POD_SWITCH(logical_dest)][logical_dest][0]->setRemoteEndpoint(uec_snk->getPort(p));
+                } else {
+                    // TRAFFICO INC
+                    topo[p]->queues_nlp_ns[topo_cfg->HOST_POD_SWITCH(logical_dest)][logical_dest][0]->setRemoteEndpoint(uec_src->getPort(p));
                 }
             }
 
-            // set up the triggers
-            // xxx
+            if (log_sink) sink_logger->monitorSink(uec_snk);
 
-            if (log_sink) {
-                sink_logger->monitorSink(uec_snk);
-            }
         } else {
-            // Use existing connection for this message
+            // Logica riuso originale
             assert(crt->msgid.has_value());
-
             UecPdcSes* pdc = flow_pdc_map.find(crt->flowid)->second;
-            uec_src = nullptr;
-            uec_snk = nullptr;
-
             optional<simtime_picosec> start_ts = {};
-            if (crt->start != TRIGGER_START) {
-                start_ts.emplace(timeFromUs((uint32_t)crt->start));
-            } 
-
+            if (crt->start != TRIGGER_START) start_ts.emplace(timeFromUs((uint32_t)crt->start));
             UecMsg* msg = pdc->enque(crt->size, start_ts, true);
-
-            if (crt->trigger) {
-                Trigger* trig = conns->getTrigger(crt->trigger, eventlist);
-                trig->add_target(*msg);
-            }
-
-            if (crt->send_done_trigger) {
-                Trigger* trig = conns->getTrigger(crt->send_done_trigger, eventlist);
-                msg->setTrigger(UecMsg::MsgStatus::SentLast, trig);
-            }
-
-            if (crt->recv_done_trigger) {
-                Trigger* trig = conns->getTrigger(crt->recv_done_trigger, eventlist);
-                msg->setTrigger(UecMsg::MsgStatus::RecvdLast, trig);
-            }
+            if (crt->trigger) conns->getTrigger(crt->trigger, eventlist)->add_target(*msg);
+            if (crt->send_done_trigger) msg->setTrigger(UecMsg::MsgStatus::SentLast, conns->getTrigger(crt->send_done_trigger, eventlist));
+            if (crt->recv_done_trigger) msg->setTrigger(UecMsg::MsgStatus::RecvdLast, conns->getTrigger(crt->recv_done_trigger, eventlist));
         }
     }
 
@@ -1072,4 +1024,3 @@ int main(int argc, char **argv) {
 
     return EXIT_SUCCESS;
 }
-

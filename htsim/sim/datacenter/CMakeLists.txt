@@ -14,6 +14,8 @@ set(LIB_SOURCES
     generic_topology.cpp
     dragonfly_plus_topology.cpp
     dragonfly_plus_switch.cpp
+    inc_switch.cpp
+    inc_topology.cpp
 )
 
 # Create static library

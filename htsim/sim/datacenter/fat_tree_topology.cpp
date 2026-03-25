@@ -17,6 +17,8 @@
 #include "queue_lossless_output.h"
 #include "swift_scheduler.h"
 #include "ecnqueue.h"
+#include "inc_switch.h"
+#include "inc_composite_queue.h"
 
 // use tokenize from connection matrix
 extern void tokenize(string const &str, const char delim, vector<string> &out);
@@ -824,15 +826,15 @@ FatTreeTopology::FatTreeTopology(const FatTreeTopologyCfg* cfg,
     // changed to always create switches
     for (uint32_t j=0;j<_cfg->NTOR;j++){
         simtime_picosec switch_latency = (_cfg->_switch_latencies[TOR_TIER] > 0) ? _cfg->_switch_latencies[TOR_TIER] : _cfg->_switch_latency;
-        switches_lp[j] = new FatTreeSwitch(*_eventlist, "Switch_LowerPod_"+ntoa(j),FatTreeSwitch::TOR,j,switch_latency,this);
+        switches_lp[j] = new IncSwitch(*_eventlist, "Switch_LowerPod_"+ntoa(j),FatTreeSwitch::TOR,j,switch_latency,this);
     }
     for (uint32_t j=0;j<_cfg->NAGG;j++){
         simtime_picosec switch_latency = (_cfg->_switch_latencies[AGG_TIER] > 0) ? _cfg->_switch_latencies[AGG_TIER] : _cfg->_switch_latency;
-        switches_up[j] = new FatTreeSwitch(*_eventlist, "Switch_UpperPod_"+ntoa(j), FatTreeSwitch::AGG,j,switch_latency,this);
+        switches_up[j] = new IncSwitch(*_eventlist, "Switch_UpperPod_"+ntoa(j), FatTreeSwitch::AGG,j,switch_latency,this);
     }
     for (uint32_t j=0;j<_cfg->NCORE;j++){
         simtime_picosec switch_latency = (_cfg->_switch_latencies[CORE_TIER] > 0) ? _cfg->_switch_latencies[CORE_TIER] : _cfg->_switch_latency;
-        switches_c[j] = new FatTreeSwitch(*_eventlist, "Switch_Core_"+ntoa(j), FatTreeSwitch::CORE,j,switch_latency,this);
+        switches_c[j] = new IncSwitch(*_eventlist, "Switch_Core_"+ntoa(j), FatTreeSwitch::CORE,j,switch_latency,this);
     }
       
     // links from lower layer pod switch to server
@@ -1181,7 +1183,7 @@ FatTreeTopology::alloc_queue(QueueLogger* queueLogger, linkspeed_bps speed, cons
         return new RandomQueue(speed, queuesize, *_eventlist, queueLogger, memFromPkt(RANDOM_BUFFER));
     case COMPOSITE:
         {
-            CompositeQueue* q = new CompositeQueue(speed, queuesize, *_eventlist, queueLogger,
+            CompositeQueue* q = new IncCompositeQueue(speed, queuesize, *_eventlist, queueLogger,
                                                    FatTreeSwitch::_trim_size, FatTreeSwitch::_disable_trim);
 
             if (_cfg->_enable_ecn){
@@ -1223,13 +1225,13 @@ FatTreeTopology::alloc_queue(QueueLogger* queueLogger, linkspeed_bps speed, cons
         return new LosslessOutputQueue(speed, memFromPkt(10000), *_eventlist, queueLogger);
     case COMPOSITE_ECN:
         if (tor && dir == DOWNLINK) 
-            return new CompositeQueue(speed, queuesize, *_eventlist, queueLogger, 
+            return new IncCompositeQueue(speed, queuesize, *_eventlist, queueLogger, 
                                       FatTreeSwitch::_trim_size, FatTreeSwitch::_disable_trim);
         else
             return new ECNQueue(speed, memFromPkt(2*SWITCH_BUFFER), *_eventlist, queueLogger, memFromPkt(15));
     case COMPOSITE_ECN_LB:
         {
-            CompositeQueue* q = new CompositeQueue(speed, queuesize, *_eventlist, queueLogger,
+            CompositeQueue* q = new IncCompositeQueue(speed, queuesize, *_eventlist, queueLogger,
                                                    FatTreeSwitch::_trim_size, FatTreeSwitch::_disable_trim);
             if (!tor || dir == UPLINK || _cfg->_enable_ecn_on_tor_downlink) {
                 // don't use ECN on ToR downlinks unless configured so.

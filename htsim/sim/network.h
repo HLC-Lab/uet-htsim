@@ -50,7 +50,8 @@ typedef enum {IP, TCP, TCPACK, TCPNACK, SWIFT, SWIFTACK, STRACK, STRACKACK,
               HPCC, HPCCACK, HPCCNACK,
               CNP,
               EQDSDATA, EQDSPULL, EQDSACK, EQDSNACK, EQDSRTS,
-              UECDATA, UECPULL, UECACK, UECNACK, UECRTS} packet_type;
+              UECDATA, UECPULL, UECACK, UECNACK, UECRTS,
+              INC_DATA, INC_RESULT} packet_type;
 
 typedef enum {NONE, UP, DOWN} packet_direction;
 
@@ -67,12 +68,23 @@ class LosslessInputQueue;
 class Packet {
     friend class PacketFlow;
  public:
+
+    // IncPacket fields
+    bool _is_inc = false;       // boolean to indicate if the packet is an INC packet
+    uint32_t _inc_job_id = 0;   // ID job INC
+    uint32_t _inc_block_id = 0; // ID block
+    uint32_t _inc_int_data = 0; // Payload
+                                
+
+    bool _is_straggler = false; 
+    
+    int _inc_last_switch_id=-1;
     // use PRIO_NONE if the packet is never expected to encounter a priority queue, otherwise default to PRIO_LO
     typedef enum {PRIO_LO, PRIO_MID, PRIO_HI, PRIO_NONE} PktPriority;
     
     /* empty constructor; Packet::set must always be called as
        well. It's a separate method, for convenient reuse */
-    Packet() {_is_header = false; _bounced = false; _type = IP; _flags = 0; _refcount = 0; _dst = UINT32_MAX; _hop_count = 0; _pathid = UINT32_MAX; _direction = NONE; _ingressqueue = NULL; _channel = 0;} 
+    Packet() {_is_header = false; _bounced = false; _type = IP; _flags = 0; _refcount = 0; _dst = UINT32_MAX; _pathid = UINT32_MAX; _direction = NONE; _ingressqueue = NULL; _route = 0; _nexthop = 0; _oldnexthop = 0; _is_inc = false; _inc_job_id = 0; _inc_block_id = 0; _inc_int_data = 0; _is_straggler = false; _inc_last_switch_id = -1; _next_routed_hop = 0;} 
 
     /* say "this packet is no longer wanted". (doesn't necessarily
        destroy it, so it can be reused) */

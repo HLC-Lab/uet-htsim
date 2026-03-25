@@ -1,7 +1,6 @@
 #include "inc_composite_queue.h"
 
 void IncCompositeQueue::receivePacket(Packet& pkt) {
-    // --- FLARE/CANARY INTERCEPTION ---
     if (pkt._is_inc) {
         // cout << "DEBUG_COMP: Packet INC (" << pkt._inc_block_id << ") arrived at " << _nodename << endl;
         
@@ -14,8 +13,5 @@ void IncCompositeQueue::receivePacket(Packet& pkt) {
              }
         }
     }
-    // ---------------------------------
-
-    // Qui sotto richiami il comportamento normale della CompositeQueue
     CompositeQueue::receivePacket(pkt);
 }

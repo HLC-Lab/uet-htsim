@@ -116,12 +116,10 @@ void IncSwitch::send_aggregated_packet(uint32_t job_id, uint32_t block_id, uint3
 
     IncPacket* p = IncPacket::newpkt(*route, job_id, block_id, aggregated_data, INC_DATA, pkt_size);
 
-    // FIRMA FONDAMENTALE PER NON FARLO INTERCETTARE DALLA CODA IN USCITA
     p->_inc_last_switch_id = getID(); 
     p->set_next_hop(next_hop_sink);
     p->set_direction(UP);
 
-    // Inserisce nella coda! Subirà il ritardo di rete.
     q->receivePacket(*p); 
 }
 
@@ -139,8 +137,6 @@ void IncSwitch::send_multicast_down(Packet* p, uint32_t aggregated_data, uint32_
         copy->make_result(); 
         copy->set_direction(DOWN);
         copy->set_next_hop(next_hop_sink);
-        
-        // FIRMA FONDAMENTALE
         copy->_inc_last_switch_id = getID();
 
         q->receivePacket(*copy);

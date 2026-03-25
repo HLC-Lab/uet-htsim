@@ -159,7 +159,6 @@ mem_b UecIncSrc::sendNewPacket(const Route& route) {
     p->_inc_int_data = (rand() % 100) + 1; // Dato simulato
     p->_inc_last_switch_id = -1;
 
-    // Logica di rete standard UEC (Entropy, SendRecord, ecc.)
     uint16_t ev = _mp->nextEntropy(_highest_sent, (uint64_t)_cwnd/_mss);
     p->set_pathid(ev);
     

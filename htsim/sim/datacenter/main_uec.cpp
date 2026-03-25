@@ -722,32 +722,25 @@ int main(int argc, char **argv) {
         if (log_switches) {
             topo[p]->add_switch_loggers(logfile, logtime);
         }
-        // --- PATCH INC: Ripristiniamo i collegamenti diretti per l'aggregazione ---
        FatTreeTopology* ft = topo[p].get();
         
-        // 1. ToR <-> Aggregation
         for (size_t tor = 0; tor < ft->switches_lp.size(); tor++) {
             for (size_t agg = 0; agg < ft->switches_up.size(); agg++) {
-                // Da ToR ad Agg
                 if (ft->queues_nlp_nup[tor][agg].size() > 0 && ft->queues_nlp_nup[tor][agg][0]) {
                     ft->queues_nlp_nup[tor][agg][0]->setRemoteEndpoint(ft->switches_up[agg]);
                 }
-                // Da Agg a ToR
                 if (ft->queues_nup_nlp[agg][tor].size() > 0 && ft->queues_nup_nlp[agg][tor][0]) {
                     ft->queues_nup_nlp[agg][tor][0]->setRemoteEndpoint(ft->switches_lp[tor]);
                 }
             }
         }
         
-        // 2. Aggregation <-> Core (solo se abbiamo 3 tier)
         if (topo_cfg->get_tiers() == 3) {
             for (size_t agg = 0; agg < ft->switches_up.size(); agg++) {
                 for (size_t core = 0; core < ft->switches_c.size(); core++) {
-                    // Da Agg a Core
                     if (ft->queues_nup_nc[agg][core].size() > 0 && ft->queues_nup_nc[agg][core][0]) {
                         ft->queues_nup_nc[agg][core][0]->setRemoteEndpoint(ft->switches_c[core]);
                     }
-                    // Da Core ad Agg
                     if (ft->queues_nc_nup[core][agg].size() > 0 && ft->queues_nc_nup[core][agg][0]) {
                         ft->queues_nc_nup[core][agg][0]->setRemoteEndpoint(ft->switches_up[agg]);
                     }
@@ -834,7 +827,6 @@ int main(int argc, char **argv) {
             UecNIC* nic_to_use = (u_dest == UINT32_MAX) ? nics.at(src).get() : nics.at(dest).get();
             UecPullPacer* pacer_to_use = (u_dest == UINT32_MAX) ? pacers[src].get() : pacers[dest].get();
 
-            // 1. Creazione Sorgente e Sink
             if (u_dest == UINT32_MAX) {
                 uec_src = new UecIncSrc(traffic_logger, eventlist, std::move(mp), *nics.at(src), ports);
                 IncSwitch::add_job_participant(src);
@@ -860,7 +852,6 @@ int main(int argc, char **argv) {
             flowmap[uec_src->flowId()] = { uec_src, uec_snk };
             if (crt->flowid) uec_snk->setFlowId(crt->flowid);
 
-            // 2. Calcolo RTT e inizializzazione CC
             simtime_picosec transmission_delay = (Packet::data_packet_size() * 8 / speedAsGbps(linkspeed) * topo_cfg->get_diameter() * 1000) 
                                                + (UecBasePacket::get_ack_size() * 8 / speedAsGbps(linkspeed) * topo_cfg->get_diameter() * 1000);
             
@@ -881,7 +872,6 @@ int main(int argc, char **argv) {
                 if (sender_driven) uec_src->initNscc(cwnd_b, rtt_to_use);
             }
 
-            // 3. Aggiunta alla rete e configurazione eventi
             uec_srcs.push_back(uec_src);
             uec_src->setDst(dest);
 
@@ -897,7 +887,6 @@ int main(int argc, char **argv) {
             ((DataReceiver*)uec_snk)->setName("Uec_sink_" + ntoa(src) + "_" + ntoa(dest));
             logfile.writeName(*(DataReceiver*)uec_snk);
 
-            // LOGICA TRIGGER ORIGINALE
             if (!conn_reuse) {
                 if (crt->size>0) uec_src->setFlowsize(crt->size);
                 if (crt->trigger) conns->getTrigger(crt->trigger, eventlist)->add_target(*uec_src);
@@ -917,7 +906,6 @@ int main(int argc, char **argv) {
                 }
             }
 
-            // 4. CABLAGGIO FINALE (Routing)
             for (uint32_t p = 0; p < planes; p++) {
                 Route* srctotor = new Route();
                 srctotor->push_back(topo[p]->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
@@ -945,7 +933,6 @@ int main(int argc, char **argv) {
             if (log_sink) sink_logger->monitorSink(uec_snk);
 
         } else {
-            // Logica riuso originale
             assert(crt->msgid.has_value());
             UecPdcSes* pdc = flow_pdc_map.find(crt->flowid)->second;
             optional<simtime_picosec> start_ts = {};

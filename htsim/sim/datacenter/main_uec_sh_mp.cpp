@@ -23,10 +23,11 @@
 #include "connection_matrix.h"
 #include "pciemodel.h"
 #include "oversubscribed_cc.h"
+#include "roundRobin.h"
 
 
-#include "fat_tree_topology_mg.h"
-#include "fat_tree_switch_mg.h"
+#include "fat_tree_topology_sh_mp.h"
+#include "fat_tree_switch_sh_mp.h"
 
 #include <list>
 
@@ -48,7 +49,7 @@ void exit_error(char* progr) {
     exit(1);
 }
 
-simtime_picosec calculate_rtt(FatTreeTopologyCfgMg* t_cfg, linkspeed_bps host_linkspeed) { 
+simtime_picosec calculate_rtt(FatTreeTopologyCfgShMp* t_cfg, linkspeed_bps host_linkspeed) { 
     /*
     Using the host linkspeed here is not very accurate, but hopefully good enough for this usecase.
     */
@@ -59,7 +60,7 @@ simtime_picosec calculate_rtt(FatTreeTopologyCfgMg* t_cfg, linkspeed_bps host_li
     return rtt;
 };
 
-uint32_t calculate_bdp_pkt(FatTreeTopologyCfgMg* t_cfg, linkspeed_bps host_linkspeed) {
+uint32_t calculate_bdp_pkt(FatTreeTopologyCfgShMp* t_cfg, linkspeed_bps host_linkspeed) {
     simtime_picosec rtt = calculate_rtt(t_cfg, host_linkspeed);
     uint32_t bdp_pkt = ceil((timeAsSec(rtt) * (host_linkspeed/8)) / (double)Packet::data_packet_size()); 
 
@@ -125,7 +126,7 @@ int main(int argc, char **argv) {
     queue_type snd_type = FAIR_PRIO;
 
     float ar_sticky_delta = 10;
-    FatTreeSwitchMg::sticky_choices ar_sticky = FatTreeSwitchMg::PER_PACKET;
+    FatTreeSwitchShMp::sticky_choices ar_sticky = FatTreeSwitchShMp::PER_PACKET;
 
     char* tm_file = NULL;
     char* topo_file = NULL;
@@ -425,9 +426,9 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i],"-ar_granularity")){
             if (!strcmp(argv[i+1],"packet"))
-                ar_sticky = FatTreeSwitchMg::PER_PACKET;
+                ar_sticky = FatTreeSwitchShMp::PER_PACKET;
             else if (!strcmp(argv[i+1],"flow"))
-                ar_sticky = FatTreeSwitchMg::PER_FLOWLET;
+                ar_sticky = FatTreeSwitchShMp::PER_FLOWLET;
             else  {
                 cout << "Expecting -ar_granularity packet|flow, found " << argv[i+1] << endl;
                 exit(1);
@@ -436,31 +437,31 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-ar_method")){
             if (!strcmp(argv[i+1],"pause")){
                 cout << "Adaptive routing based on pause state " << endl;
-                FatTreeSwitchMg::fn = &FatTreeSwitchMg::compare_pause;
+                FatTreeSwitchShMp::fn = &FatTreeSwitchShMp::compare_pause;
             }
             else if (!strcmp(argv[i+1],"queue")){
                 cout << "Adaptive routing based on queue size " << endl;
-                FatTreeSwitchMg::fn = &FatTreeSwitchMg::compare_queuesize;
+                FatTreeSwitchShMp::fn = &FatTreeSwitchShMp::compare_queuesize;
             }
             else if (!strcmp(argv[i+1],"bandwidth")){
                 cout << "Adaptive routing based on bandwidth utilization " << endl;
-                FatTreeSwitchMg::fn = &FatTreeSwitchMg::compare_bandwidth;
+                FatTreeSwitchShMp::fn = &FatTreeSwitchShMp::compare_bandwidth;
             }
             else if (!strcmp(argv[i+1],"pqb")){
                 cout << "Adaptive routing based on pause, queuesize and bandwidth utilization " << endl;
-                FatTreeSwitchMg::fn = &FatTreeSwitchMg::compare_pqb;
+                FatTreeSwitchShMp::fn = &FatTreeSwitchShMp::compare_pqb;
             }
             else if (!strcmp(argv[i+1],"pq")){
                 cout << "Adaptive routing based on pause, queuesize" << endl;
-                FatTreeSwitchMg::fn = &FatTreeSwitchMg::compare_pq;
+                FatTreeSwitchShMp::fn = &FatTreeSwitchShMp::compare_pq;
             }
             else if (!strcmp(argv[i+1],"pb")){
                 cout << "Adaptive routing based on pause, bandwidth utilization" << endl;
-                FatTreeSwitchMg::fn = &FatTreeSwitchMg::compare_pb;
+                FatTreeSwitchShMp::fn = &FatTreeSwitchShMp::compare_pb;
             }
             else if (!strcmp(argv[i+1],"qb")){
                 cout << "Adaptive routing based on queuesize, bandwidth utilization" << endl;
-                FatTreeSwitchMg::fn = &FatTreeSwitchMg::compare_qb; 
+                FatTreeSwitchShMp::fn = &FatTreeSwitchShMp::compare_qb; 
             }
             else {
                 cout << "Unknown AR method expecting one of pause, queue, bandwidth, pqb, pq, pb, qb" << endl;
@@ -470,40 +471,40 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-strat")){
             if (!strcmp(argv[i+1], "ecmp_host")) {
                 route_strategy = ECMP_FIB;
-                FatTreeSwitchMg::set_strategy(FatTreeSwitchMg::ECMP);
+                FatTreeSwitchShMp::set_strategy(FatTreeSwitchShMp::ECMP);
             } else if (!strcmp(argv[i+1], "rr_ecmp")) {
                 //this is the host route strategy;
                 route_strategy = ECMP_FIB_ECN;
                 qt = COMPOSITE_ECN_LB;
                 //this is the switch route strategy. 
-                FatTreeSwitchMg::set_strategy(FatTreeSwitchMg::RR_ECMP);
+                FatTreeSwitchShMp::set_strategy(FatTreeSwitchShMp::RR_ECMP);
             } else if (!strcmp(argv[i+1], "ecmp_host_ecn")) {
                 route_strategy = ECMP_FIB_ECN;
-                FatTreeSwitchMg::set_strategy(FatTreeSwitchMg::ECMP);
+                FatTreeSwitchShMp::set_strategy(FatTreeSwitchShMp::ECMP);
                 qt = COMPOSITE_ECN_LB;
             } else if (!strcmp(argv[i+1], "reactive_ecn")) {
                 // Jitu's suggestion for something really simple
                 // One path at a time, but switch whenever we get a trim or ecn
                 //this is the host route strategy;
                 route_strategy = REACTIVE_ECN;
-                FatTreeSwitchMg::set_strategy(FatTreeSwitchMg::ECMP);
+                FatTreeSwitchShMp::set_strategy(FatTreeSwitchShMp::ECMP);
                 qt = COMPOSITE_ECN_LB;
             } else if (!strcmp(argv[i+1], "ecmp_ar")) {
                 route_strategy = ECMP_FIB;
                 path_entropy_size = 1;
-                FatTreeSwitchMg::set_strategy(FatTreeSwitchMg::ADAPTIVE_ROUTING);
+                FatTreeSwitchShMp::set_strategy(FatTreeSwitchShMp::ADAPTIVE_ROUTING);
             } else if (!strcmp(argv[i+1], "ecmp_host_ar")) {
                 route_strategy = ECMP_FIB;
-                FatTreeSwitchMg::set_strategy(FatTreeSwitchMg::ECMP_ADAPTIVE);
+                FatTreeSwitchShMp::set_strategy(FatTreeSwitchShMp::ECMP_ADAPTIVE);
                 //the stuff below obsolete
-                //FatTreeSwitchMg::set_ar_fraction(atoi(argv[i+2]));
+                //FatTreeSwitch::set_ar_fraction(atoi(argv[i+2]));
                 //cout << "AR fraction: " << atoi(argv[i+2]) << endl;
                 //i++;
             } else if (!strcmp(argv[i+1], "ecmp_rr")) {
                 // switch round robin
                 route_strategy = ECMP_FIB;
                 path_entropy_size = 1;
-                FatTreeSwitchMg::set_strategy(FatTreeSwitchMg::RR);
+                FatTreeSwitchShMp::set_strategy(FatTreeSwitchShMp::RR);
             }
             i++;
         } else {
@@ -512,6 +513,7 @@ int main(int argc, char **argv) {
         }
         i++;
     }
+    // end arg pars
 
     if (end_time > 0 && logtime >= timeFromUs((uint32_t)end_time)){
         cout << "Logtime set to endtime" << endl;
@@ -533,18 +535,18 @@ int main(int argc, char **argv) {
 
     if (route_strategy==NOT_SET){
         route_strategy = ECMP_FIB;
-        FatTreeSwitchMg::set_strategy(FatTreeSwitchMg::ECMP);
+        FatTreeSwitchShMp::set_strategy(FatTreeSwitchShMp::ECMP);
     }
 
     /*
     UecSink::_oversubscribed_congestion_control = oversubscribed_congestion_control;
     */
 
-    FatTreeSwitchMg::_ar_sticky = ar_sticky;
-    FatTreeSwitchMg::_sticky_delta = timeFromUs(ar_sticky_delta);
-    FatTreeSwitchMg::_ecn_threshold_fraction = ecn_thresh;
-    FatTreeSwitchMg::_disable_trim = disable_trim;
-    FatTreeSwitchMg::_trim_size = trimsize;
+    FatTreeSwitchShMp::_ar_sticky = ar_sticky;
+    FatTreeSwitchShMp::_sticky_delta = timeFromUs(ar_sticky_delta);
+    FatTreeSwitchShMp::_ecn_threshold_fraction = ecn_thresh;
+    FatTreeSwitchShMp::_disable_trim = disable_trim;
+    FatTreeSwitchShMp::_trim_size = trimsize;
 
     eventlist.setEndtime(timeFromUs((uint32_t)end_time));
 
@@ -580,6 +582,9 @@ int main(int argc, char **argv) {
     logfile.setStartTime(timeFromSec(0));
 
     vector<unique_ptr<UecNIC>> nics;
+    vector<unique_ptr<UecNIC>> nics_mp;
+
+    vector<unique_ptr<UecNIC>> *selected_nics;
 
     UecSinkLoggerSampling* sink_logger = NULL;
     if (log_sink) {
@@ -654,9 +659,9 @@ int main(int argc, char **argv) {
              << endl;
     }
 
-    unique_ptr<FatTreeTopologyCfgMg> topo_cfg;
+    unique_ptr<FatTreeTopologyCfgShMp> topo_cfg;
     if (topo_file) {
-        topo_cfg = FatTreeTopologyCfgMg::load(topo_file, memFromPkt(queuesize_pkt), qt, snd_type);
+        topo_cfg = FatTreeTopologyCfgShMp::load(topo_file, memFromPkt(queuesize_pkt), qt, snd_type);
 
         if (topo_cfg->no_of_nodes() != no_of_nodes) {
             cerr << "Mismatch between connection matrix (" << no_of_nodes << " nodes) and topology ("
@@ -664,7 +669,7 @@ int main(int argc, char **argv) {
             exit(1);
         }
     } else {
-        topo_cfg = make_unique<FatTreeTopologyCfgMg>(tiers, no_of_nodes, linkspeed, memFromPkt(queuesize_pkt),
+        topo_cfg = make_unique<FatTreeTopologyCfgShMp>(tiers, no_of_nodes, linkspeed, memFromPkt(queuesize_pkt),
                                                    hop_latency, switch_latency, 
                                                    qt, snd_type);
     }
@@ -712,15 +717,21 @@ int main(int argc, char **argv) {
 
     cout << *topo_cfg << endl;
 
-    vector<unique_ptr<FatTreeTopologyMg>> topo;
+    vector<unique_ptr<FatTreeTopologyShMp>> topo;
     topo.resize(planes);
     for (uint32_t p = 0; p < planes; p++) {
-        topo[p] = make_unique<FatTreeTopologyMg>(topo_cfg.get(), qlf, &eventlist, nullptr);
-        
+        topo[p] = make_unique<FatTreeTopologyShMp>(topo_cfg.get(), qlf, &eventlist, nullptr);
+
         if (log_switches) {
             topo[p]->add_switch_loggers(logfile, logtime);
         }
     }
+
+    uint32_t levels = topo[0]->PLANES;
+    ports = planes * levels;
+    uint32_t ports_ECMP = planes;
+    uint32_t selected_ports = ports_ECMP;
+    cout << "Ports per NIC = " << ports << endl;
 
     cout << "network_max_unloaded_rtt " << timeAsUs(network_max_unloaded_rtt) << endl;
 
@@ -751,21 +762,42 @@ int main(int argc, char **argv) {
     vector<PCIeModel*> pcie_models;
     vector<OversubscribedCC*> oversubscribed_ccs;
 
+    vector<unique_ptr<UecPullPacer>> pacers_mp;
+    vector<PCIeModel*> pcie_models_mp;
+    vector<OversubscribedCC*> oversubscribed_ccs_mp;
+
+    vector<unique_ptr<UecPullPacer>> *selected_pacers;
+    vector<PCIeModel*> *selected_pcie_models;
+    vector<OversubscribedCC*> *selected_oversubscribed_ccs;
+
     for (size_t ix = 0; ix < no_of_nodes; ix++){
         auto &pacer = pacers.emplace_back(make_unique<UecPullPacer>(linkspeed, 0.99,
+          UecBasePacket::unquantize(UecSink::_credit_per_pull), eventlist, ports_ECMP));
+        
+        auto &pacer_mp = pacers_mp.emplace_back(make_unique<UecPullPacer>(linkspeed, 0.99,
           UecBasePacket::unquantize(UecSink::_credit_per_pull), eventlist, ports));
 
-        if (UecSink::_model_pcie)
+        if (UecSink::_model_pcie){
             pcie_models.push_back(new PCIeModel(linkspeed * pcie_rate, UecSrc::_mtu, eventlist,
               pacer.get()));
+            pcie_models_mp.push_back(new PCIeModel(linkspeed * pcie_rate, UecSrc::_mtu, eventlist,
+              pacer_mp.get()));
+        }
 
-        if (UecSink::_oversubscribed_cc)
+        if (UecSink::_oversubscribed_cc) {
             oversubscribed_ccs.push_back(new OversubscribedCC(eventlist, pacer.get()));
+            oversubscribed_ccs_mp.push_back(new OversubscribedCC(eventlist, pacer_mp.get()));
+        }
+            
 
         auto &nic = nics.emplace_back(make_unique<UecNIC>(ix, eventlist,
+                                                          linkspeed, ports_ECMP));
+                                                          
+        auto &nic_mp = nics_mp.emplace_back(make_unique<UecNIC>(ix, eventlist,
                                                           linkspeed, ports));
         if (log_nic) {
             nic_logger->monitorNic(nic.get());
+            nic_logger->monitorNic(nic_mp.get());
         }
     }
 
@@ -818,7 +850,25 @@ int main(int argc, char **argv) {
                 abort();
             }
 
-            uec_src = new UecSrc(traffic_logger, eventlist, move(mp), *nics.at(src), ports);
+            
+            const bool same_hs = (topo[0]->HOSTSWITCH_ID(src) == topo[0]->HOSTSWITCH_ID(dest));
+
+            
+            selected_ports = same_hs ? ports : ports_ECMP;
+            selected_nics = same_hs ? &nics_mp : &nics;
+            selected_pacers = same_hs ? &pacers : &pacers_mp;
+            selected_pcie_models = same_hs ? &pcie_models: &pcie_models_mp;
+            selected_oversubscribed_ccs = same_hs ? &oversubscribed_ccs: &oversubscribed_ccs_mp;
+            
+            uec_src = new UecSrc(traffic_logger, eventlist, std::move(mp), *(*selected_nics).at(src), selected_ports);
+
+            /*
+            if (same_hs){
+                uec_src = new UecSrc(traffic_logger, eventlist, std::move(mp), *nics_mp.at(src), ports);
+            } else {
+                uec_src = new UecSrc(traffic_logger, eventlist, std::move(mp), *nics.at(src), ports_ECMP);
+            }
+            */
 
             if (crt->flowid) {
                 uec_src->setFlowId(crt->flowid);
@@ -828,16 +878,17 @@ int main(int argc, char **argv) {
             if (conn_reuse) {
                 stringstream uec_src_dbg_tag;
                 uec_src_dbg_tag << "flow_id " << uec_src->flowId();
+
                 UecPdcSes* pdc = new UecPdcSes(uec_src, EventList::getTheEventList(), UecSrc::_mss, UecSrc::_hdr_size, uec_src_dbg_tag.str());
                 uec_src->makeReusable(pdc);
                 flow_pdc_map[uec_src->flowId()] = pdc;
             }
 
             if (receiver_driven)
-                uec_snk = new UecSink(NULL, pacers[dest].get(), *nics.at(dest),
-                                      ports);
+                uec_snk = new UecSink(NULL, (*selected_pacers)[dest].get(), *(*selected_nics).at(dest),
+                                     selected_ports);
             else //each connection has its own pacer, so receiver driven mode does not kick in! 
-                uec_snk = new UecSink(NULL,linkspeed,1.1,UecBasePacket::unquantize(UecSink::_credit_per_pull),eventlist,*nics.at(dest), ports);
+                uec_snk = new UecSink(NULL,linkspeed,1.1,UecBasePacket::unquantize(UecSink::_credit_per_pull),eventlist,*(*selected_nics).at(dest), selected_ports);
 
             flowmap[uec_src->flowId()] = { uec_src, uec_snk };
 
@@ -877,11 +928,11 @@ int main(int argc, char **argv) {
             uec_snk->setSrc(src);
 
             if (UecSink::_model_pcie){
-                uec_snk->setPCIeModel(pcie_models[dest]);
+                uec_snk->setPCIeModel((*selected_pcie_models)[dest]);
             }
                             
             if (UecSink::_oversubscribed_cc){
-                uec_snk->setOversubscribedCC(oversubscribed_ccs[dest]);
+                uec_snk->setOversubscribedCC((*selected_oversubscribed_ccs)[dest]);
             }
 
             ((DataReceiver*)uec_snk)->setName("Uec_sink_" + ntoa(src) + "_" + ntoa(dest));
@@ -934,34 +985,50 @@ int main(int argc, char **argv) {
                 }
             }
 
+
             //uec_snk->set_priority(crt->priority);
                             
             for (uint32_t p = 0; p < planes; p++) {
-                if(topo[p]->has_host_host_link(src, dest)) {
-                    // Costruisco la rotta diretta SRC->DST (una sola "hop": Queue -> Pipe -> Endpoint)
+                if(topo[p]->HOSTSWITCH_ID(src) == topo[p]->HOSTSWITCH_ID(dest)){
 
-                    Route* src2dst = new Route();
-                    src2dst->push_back(topo[p]->queues_host_host[src][dest][0]);
-                    src2dst->push_back(topo[p]->pipes_host_host[src][dest][0]);
-                    src2dst->push_back(uec_snk->getPort(p)); // Endpoint del sink
-                    
+                    // Same host-switch: stripe packets across ALL scale-up levels.
+                    // We create one NIC port per (plane, level).
+                    const uint32_t hs = topo[p]->HOSTSWITCH_ID(src);
+                    const uint32_t levels = topo[p]->PLANES;
 
-                    // Costruisco la rotta diretta di ritorno DST->SRC
-                    Route* dst2src = new Route();
-                    dst2src->push_back(topo[p]->queues_host_host[dest][src][0]);
-                    dst2src->push_back(topo[p]->pipes_host_host[dest][src][0]);
-                    dst2src->push_back(uec_src->getPort(p)); // Endpoint del src
+                    for (uint32_t lvl = 0; lvl < levels; lvl++) {
+                        const uint32_t port_id = p * levels + lvl;
 
-                    // Collego la porta usando direttamente i path host<->host
-                    uec_src->connectPort(p, *src2dst, *dst2src, *uec_snk, crt->start);
+                        assert(port_id < selected_ports);
 
+                        Route* srctoswh = new Route();
+                        srctoswh->push_back(topo[p]->queues_nh_nhs[src][hs][lvl][0]);
+                        srctoswh->push_back(topo[p]->pipes_nh_nhs[src][hs][lvl][0]);
+                        srctoswh->push_back(topo[p]->queues_nh_nhs[src][hs][lvl][0]->getRemoteEndpoint());
+
+                        Route* swhtodest = new Route();
+                        swhtodest->push_back(topo[p]->queues_nh_nhs[dest][hs][lvl][0]);
+                        swhtodest->push_back(topo[p]->pipes_nh_nhs[dest][hs][lvl][0]);
+                        swhtodest->push_back(topo[p]->queues_nh_nhs[dest][hs][lvl][0]->getRemoteEndpoint());
+
+                        uec_src->connectPort(port_id, *srctoswh, *swhtodest, *uec_snk, crt->start);
+
+                        // Register src and dst with the corresponding host-switch at this level.
+                        assert(topo[p]->switches_host[hs][lvl]);
+                        ((FatTreeSwitchShMp*)topo[p]->switches_host[hs][lvl])->addHostPortPlus(
+                            src, uec_snk->flowId(), uec_src->getPort(port_id), lvl);
+                        ((FatTreeSwitchShMp*)topo[p]->switches_host[hs][lvl])->addHostPortPlus(
+                            dest, uec_src->flowId(), uec_snk->getPort(port_id), lvl);
+                    }
+
+                    // Done for this plane, move to next plane.
                     break;
                 }
                 switch (route_strategy) {
                 case ECMP_FIB:
                 case ECMP_FIB_ECN:
                 case REACTIVE_ECN:
-                    {
+                    {   
                         Route* srctotor = new Route();
                         srctotor->push_back(topo[p]->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
                         srctotor->push_back(topo[p]->pipes_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
@@ -972,15 +1039,18 @@ int main(int argc, char **argv) {
                         dsttotor->push_back(topo[p]->pipes_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
                         dsttotor->push_back(topo[p]->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]->getRemoteEndpoint());
 
-                        uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk, crt->start);
-                        //uec_src->setPaths(path_entropy_size);
-                        //uec_snk->setPaths(path_entropy_size);
+                        const uint32_t port_id = 0;
 
-                        //register src and snk to receive packets from their respective TORs. 
+                        uec_src->connectPort(port_id, *srctotor, *dsttotor, *uec_snk, crt->start);
+
                         assert(topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
-                        assert(topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
-                        topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]->addHostPort(src,uec_snk->flowId(),uec_src->getPort(p));
-                        topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(dest)]->addHostPort(dest,uec_src->flowId(),uec_snk->getPort(p));
+                        assert(topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(dest)]);
+
+                        topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]
+                            ->addHostPort(src, uec_snk->flowId(), uec_src->getPort(port_id));
+
+                        topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(dest)]
+                            ->addHostPort(dest, uec_src->flowId(), uec_snk->getPort(port_id));
                         break;
                     }
                 default:
@@ -1025,6 +1095,7 @@ int main(int argc, char **argv) {
             }
         }
     }
+
     Logged::dump_idmap();
     // Record the setup
     int pktsize = Packet::data_packet_size();

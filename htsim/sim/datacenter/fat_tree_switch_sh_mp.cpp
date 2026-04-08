@@ -1,14 +1,14 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*-
-#include "fat_tree_switch_sh.h"
+#include "fat_tree_switch_sh_mp.h"
 #include "routetable.h"
-#include "fat_tree_topology_sh.h"
+#include "fat_tree_topology_sh_mp.h"
 #include "callback_pipe.h"
 #include "queue_lossless.h"
 #include "queue_lossless_output.h"
 
-unordered_map<BaseQueue*,uint32_t> FatTreeSwitchSh::_port_flow_counts;
+unordered_map<BaseQueue*,uint32_t> FatTreeSwitchShMp::_port_flow_counts;
 
-FatTreeSwitchSh::FatTreeSwitchSh(EventList& eventlist, string s, switch_type t, uint32_t id,simtime_picosec delay, FatTreeTopologySh* ft): Switch(eventlist, s) {
+FatTreeSwitchShMp::FatTreeSwitchShMp(EventList& eventlist, string s, switch_type t, uint32_t id,simtime_picosec delay, FatTreeTopologyShMp* ft): Switch(eventlist, s) {
     _id = id;
     _type = t;
     _pipe = new CallbackPipe(delay,eventlist, this);
@@ -20,12 +20,12 @@ FatTreeSwitchSh::FatTreeSwitchSh(EventList& eventlist, string s, switch_type t, 
     _fib = new RouteTable();
 }
 
-FatTreeSwitchSh::~FatTreeSwitchSh() {
+FatTreeSwitchShMp::~FatTreeSwitchShMp() {
     delete _pipe;
     delete _fib;
 }
 
-void FatTreeSwitchSh::receivePacket(Packet& pkt){
+void FatTreeSwitchShMp::receivePacket(Packet& pkt){
     if (pkt.type()==ETH_PAUSE){
         EthPausePacket* p = (EthPausePacket*)&pkt;
         //I must be in lossless mode!
@@ -62,7 +62,7 @@ void FatTreeSwitchSh::receivePacket(Packet& pkt){
     }
 };
 
-void FatTreeSwitchSh::addHostPort(int addr, int flowid, PacketSink* transport_port){
+void FatTreeSwitchShMp::addHostPort(int addr, int flowid, PacketSink* transport_port){
     Route* rt = new Route();
     rt->push_back(_ft->queues_nlp_ns[_ft->cfg().HOST_POD_SWITCH(addr)][addr][0]);
     rt->push_back(_ft->pipes_nlp_ns[_ft->cfg().HOST_POD_SWITCH(addr)][addr][0]);
@@ -70,9 +70,9 @@ void FatTreeSwitchSh::addHostPort(int addr, int flowid, PacketSink* transport_po
     _fib->addHostRoute(addr,rt,flowid);
 }
 
-void FatTreeSwitchSh::addHostPortPlus(int addr, int flowid, PacketSink* transport_port){
-    BaseQueue* q = _ft->queues_nhs_nh[_ft->HOSTSWITCH_ID(addr)][addr][0];
-    Pipe* p = _ft->pipes_nhs_nh[_ft->HOSTSWITCH_ID(addr)][addr][0];
+void FatTreeSwitchShMp::addHostPortPlus(int addr, int flowid, PacketSink* transport_port, int level){
+    BaseQueue* q = _ft->queues_nhs_nh[_ft->HOSTSWITCH_ID(addr)][addr][level][0];
+    Pipe* p = _ft->pipes_nhs_nh[_ft->HOSTSWITCH_ID(addr)][addr][level][0];
 
     Route* rt = new Route();
     rt->push_back(q);
@@ -89,7 +89,7 @@ uint32_t mhash(uint32_t x) {
     return x;
 }
 
-uint32_t FatTreeSwitchSh::adaptive_route_p2c(vector<FibEntry*>* ecmp_set, int8_t (*cmp)(FibEntry*,FibEntry*)){
+uint32_t FatTreeSwitchShMp::adaptive_route_p2c(vector<FibEntry*>* ecmp_set, int8_t (*cmp)(FibEntry*,FibEntry*)){
     uint32_t choice = 0, min = UINT32_MAX;
     uint32_t start, i = 0;
     static const uint16_t nr_choices = 2;
@@ -110,7 +110,7 @@ uint32_t FatTreeSwitchSh::adaptive_route_p2c(vector<FibEntry*>* ecmp_set, int8_t
     return choice;
 }
 
-uint32_t FatTreeSwitchSh::adaptive_route(vector<FibEntry*>* ecmp_set, int8_t (*cmp)(FibEntry*,FibEntry*)){
+uint32_t FatTreeSwitchShMp::adaptive_route(vector<FibEntry*>* ecmp_set, int8_t (*cmp)(FibEntry*,FibEntry*)){
     //cout << "adaptive_route" << endl;
     uint32_t choice = 0;
 
@@ -150,7 +150,7 @@ uint32_t FatTreeSwitchSh::adaptive_route(vector<FibEntry*>* ecmp_set, int8_t (*c
     return choice;
 }
 
-uint32_t FatTreeSwitchSh::replace_worst_choice(vector<FibEntry*>* ecmp_set, int8_t (*cmp)(FibEntry*,FibEntry*),uint32_t my_choice){
+uint32_t FatTreeSwitchShMp::replace_worst_choice(vector<FibEntry*>* ecmp_set, int8_t (*cmp)(FibEntry*,FibEntry*),uint32_t my_choice){
     uint32_t best_choice = 0;
     uint32_t worst_choice = 0;
 
@@ -193,7 +193,7 @@ uint32_t FatTreeSwitchSh::replace_worst_choice(vector<FibEntry*>* ecmp_set, int8
 }
 
 
-int8_t FatTreeSwitchSh::compare_pause(FibEntry* left, FibEntry* right){
+int8_t FatTreeSwitchShMp::compare_pause(FibEntry* left, FibEntry* right){
     Route * r1= left->getEgressPort();
     assert(r1 && r1->size()>1);
     LosslessOutputQueue* q1 = dynamic_cast<LosslessOutputQueue*>(r1->at(0));
@@ -209,7 +209,7 @@ int8_t FatTreeSwitchSh::compare_pause(FibEntry* left, FibEntry* right){
         return 0;
 }
 
-int8_t FatTreeSwitchSh::compare_flow_count(FibEntry* left, FibEntry* right){
+int8_t FatTreeSwitchShMp::compare_flow_count(FibEntry* left, FibEntry* right){
     Route * r1= left->getEgressPort();
     assert(r1 && r1->size()>1);
     BaseQueue* q1 = (BaseQueue*)(r1->at(0));
@@ -233,7 +233,7 @@ int8_t FatTreeSwitchSh::compare_flow_count(FibEntry* left, FibEntry* right){
         return 0;
 }
 
-int8_t FatTreeSwitchSh::compare_queuesize(FibEntry* left, FibEntry* right){
+int8_t FatTreeSwitchShMp::compare_queuesize(FibEntry* left, FibEntry* right){
     Route * r1= left->getEgressPort();
     assert(r1 && r1->size()>1);
     BaseQueue* q1 = dynamic_cast<BaseQueue*>(r1->at(0));
@@ -249,7 +249,7 @@ int8_t FatTreeSwitchSh::compare_queuesize(FibEntry* left, FibEntry* right){
         return 0;
 }
 
-int8_t FatTreeSwitchSh::compare_bandwidth(FibEntry* left, FibEntry* right){
+int8_t FatTreeSwitchShMp::compare_bandwidth(FibEntry* left, FibEntry* right){
     Route * r1= left->getEgressPort();
     assert(r1 && r1->size()>1);
     BaseQueue* q1 = dynamic_cast<BaseQueue*>(r1->at(0));
@@ -272,7 +272,7 @@ int8_t FatTreeSwitchSh::compare_bandwidth(FibEntry* left, FibEntry* right){
         return 0;        */
 }
 
-int8_t FatTreeSwitchSh::compare_pqb(FibEntry* left, FibEntry* right){
+int8_t FatTreeSwitchShMp::compare_pqb(FibEntry* left, FibEntry* right){
     //compare pause, queuesize, bandwidth.
     int8_t p = compare_pause(left, right);
 
@@ -287,7 +287,7 @@ int8_t FatTreeSwitchSh::compare_pqb(FibEntry* left, FibEntry* right){
     return compare_bandwidth(left,right);
 }
 
-int8_t FatTreeSwitchSh::compare_pq(FibEntry* left, FibEntry* right){
+int8_t FatTreeSwitchShMp::compare_pq(FibEntry* left, FibEntry* right){
     //compare pause, queuesize, bandwidth.
     int8_t p = compare_pause(left, right);
 
@@ -297,7 +297,7 @@ int8_t FatTreeSwitchSh::compare_pq(FibEntry* left, FibEntry* right){
     return compare_queuesize(left,right);
 }
 
-int8_t FatTreeSwitchSh::compare_qb(FibEntry* left, FibEntry* right){
+int8_t FatTreeSwitchShMp::compare_qb(FibEntry* left, FibEntry* right){
     //compare pause, queuesize, bandwidth.
     int8_t p = compare_queuesize(left, right);
 
@@ -307,7 +307,7 @@ int8_t FatTreeSwitchSh::compare_qb(FibEntry* left, FibEntry* right){
     return compare_bandwidth(left,right);
 }
 
-int8_t FatTreeSwitchSh::compare_pb(FibEntry* left, FibEntry* right){
+int8_t FatTreeSwitchShMp::compare_pb(FibEntry* left, FibEntry* right){
     //compare pause, queuesize, bandwidth.
     int8_t p = compare_pause(left, right);
 
@@ -317,7 +317,7 @@ int8_t FatTreeSwitchSh::compare_pb(FibEntry* left, FibEntry* right){
     return compare_bandwidth(left,right);
 }
 
-void FatTreeSwitchSh::permute_paths(vector<FibEntry *>* uproutes) {
+void FatTreeSwitchShMp::permute_paths(vector<FibEntry *>* uproutes) {
     int len = uproutes->size();
     for (int i = 0; i < len; i++) {
         int ix = random() % (len - i);
@@ -327,17 +327,17 @@ void FatTreeSwitchSh::permute_paths(vector<FibEntry *>* uproutes) {
     }
 }
 
-FatTreeSwitchSh::routing_strategy FatTreeSwitchSh::_strategy = FatTreeSwitchSh::NIX;
-uint16_t FatTreeSwitchSh::_ar_fraction = 0;
-uint16_t FatTreeSwitchSh::_ar_sticky = FatTreeSwitchSh::PER_PACKET;
-simtime_picosec FatTreeSwitchSh::_sticky_delta = timeFromUs((uint32_t)10);
-double FatTreeSwitchSh::_ecn_threshold_fraction = 0.2;
-double FatTreeSwitchSh::_speculative_threshold_fraction = 0.2;
-int8_t (*FatTreeSwitchSh::fn)(FibEntry*,FibEntry*)= &FatTreeSwitchSh::compare_queuesize;
-uint16_t FatTreeSwitchSh::_trim_size = 64;
-bool FatTreeSwitchSh::_disable_trim = false;
+FatTreeSwitchShMp::routing_strategy FatTreeSwitchShMp::_strategy = FatTreeSwitchShMp::NIX;
+uint16_t FatTreeSwitchShMp::_ar_fraction = 0;
+uint16_t FatTreeSwitchShMp::_ar_sticky = FatTreeSwitchShMp::PER_PACKET;
+simtime_picosec FatTreeSwitchShMp::_sticky_delta = timeFromUs((uint32_t)10);
+double FatTreeSwitchShMp::_ecn_threshold_fraction = 0.2;
+double FatTreeSwitchShMp::_speculative_threshold_fraction = 0.2;
+int8_t (*FatTreeSwitchShMp::fn)(FibEntry*,FibEntry*)= &FatTreeSwitchShMp::compare_queuesize;
+uint16_t FatTreeSwitchShMp::_trim_size = 64;
+bool FatTreeSwitchShMp::_disable_trim = false;
 
-Route* FatTreeSwitchSh::getNextHop(Packet& pkt, BaseQueue* ingress_port){
+Route* FatTreeSwitchShMp::getNextHop(Packet& pkt, BaseQueue* ingress_port){
 
     //int dst = pkt.dst();
     //int src = pkt.flow_id();
@@ -371,20 +371,20 @@ Route* FatTreeSwitchSh::getNextHop(Packet& pkt, BaseQueue* ingress_port){
             case NIX:
                 abort();
             case ECMP:
-                ecmp_choice = freeBSDHashSh(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
+                ecmp_choice = freeBSDHashShMp(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
                 break;
             case ADAPTIVE_ROUTING:
                 if (pkt.size() < 100) {
                     // don't bother adaptive routing the small packets - don't want to pollute the tables
-                    ecmp_choice = freeBSDHashSh(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
+                    ecmp_choice = freeBSDHashShMp(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
                     break;
                 }
-                if (_ar_sticky==FatTreeSwitchSh::PER_PACKET){
+                if (_ar_sticky==FatTreeSwitchShMp::PER_PACKET){
                     ecmp_choice = adaptive_route(available_hops,fn); 
                 } 
-                else if (_ar_sticky==FatTreeSwitchSh::PER_FLOWLET){     
+                else if (_ar_sticky==FatTreeSwitchShMp::PER_FLOWLET){     
                     if (_flowlet_maps.find(pkt.flow_id())!=_flowlet_maps.end()){
-                        FlowletInfoSh* f = _flowlet_maps[pkt.flow_id()];
+                        FlowletInfoShMp* f = _flowlet_maps[pkt.flow_id()];
                         
                         // only reroute an existing flow if its inter packet time is larger than _sticky_delta and
                         // and
@@ -408,19 +408,19 @@ Route* FatTreeSwitchSh::getNextHop(Packet& pkt, BaseQueue* ingress_port){
                         ecmp_choice = adaptive_route(available_hops,fn); 
                         _last_choice = eventlist().now();
 
-                        _flowlet_maps[pkt.flow_id()] = new FlowletInfoSh(ecmp_choice,eventlist().now());
+                        _flowlet_maps[pkt.flow_id()] = new FlowletInfoShMp(ecmp_choice,eventlist().now());
                     }
                 }
 
                 break;
             case ECMP_ADAPTIVE:
-                ecmp_choice = freeBSDHashSh(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
+                ecmp_choice = freeBSDHashShMp(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
                 if (random()%100 < 50)
                     ecmp_choice = replace_worst_choice(available_hops,fn, ecmp_choice);
                 break;
             case RR:
                 if (pkt.size()<128)
-                    ecmp_choice = freeBSDHashSh(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
+                    ecmp_choice = freeBSDHashShMp(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
                 else {
                     if (_crt_route>=1*available_hops->size()){
                         _crt_route = 0;
@@ -439,7 +439,7 @@ Route* FatTreeSwitchSh::getNextHop(Packet& pkt, BaseQueue* ingress_port){
                     ecmp_choice = _crt_route % available_hops->size();
                     _crt_route ++;
                 }
-                else ecmp_choice = freeBSDHashSh(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
+                else ecmp_choice = freeBSDHashShMp(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops->size();
                 
                 break;
             }

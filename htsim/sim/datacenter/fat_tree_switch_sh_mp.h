@@ -1,12 +1,12 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*-
-#ifndef _SH_FATTREESWITCH_H
-#define _SH_FATTREESWITCH_H
+#ifndef _SH_MP_FATTREESWITCH_H
+#define _SH_MP_FATTREESWITCH_H
 
 #include "switch.h"
 #include "callback_pipe.h"
 #include <unordered_map>
 
-class FatTreeTopologySh;
+class FatTreeTopologyShMp;
 
 
 
@@ -61,7 +61,7 @@ class FatTreeTopologySh;
         c -= a; c -= b; c ^= (b >> 15);         \
     } while (/*CONSTCOND*/0)
 
-static inline uint32_t freeBSDHashSh(uint32_t target1, uint32_t target2 = 0, uint32_t target3 = 0)
+static inline uint32_t freeBSDHashShMp(uint32_t target1, uint32_t target2 = 0, uint32_t target3 = 0)
 {
     uint32_t a = 0x9e3779b9, b = 0x9e3779b9, c = 0; // hask key
         
@@ -74,16 +74,16 @@ static inline uint32_t freeBSDHashSh(uint32_t target1, uint32_t target2 = 0, uin
 
 #undef MIX
 
-class FlowletInfoSh {
+class FlowletInfoShMp {
 public:
     uint32_t _egress;
     simtime_picosec _last;
 
-    FlowletInfoSh(uint32_t egress,simtime_picosec lasttime) {_egress = egress; _last = lasttime;};
+    FlowletInfoShMp(uint32_t egress,simtime_picosec lasttime) {_egress = egress; _last = lasttime;};
 
 };
 
-class FatTreeSwitchSh : public Switch {
+class FatTreeSwitchShMp : public Switch {
 public:
     enum switch_type {
         NONE = 0, TOR = 1, AGG = 2, CORE = 3, SCALEUPSW = 4
@@ -97,8 +97,8 @@ public:
         PER_PACKET = 0, PER_FLOWLET = 1
     };
 
-    FatTreeSwitchSh(EventList& eventlist, string s, switch_type t, uint32_t id,simtime_picosec switch_delay, FatTreeTopologySh* ft);
-    ~FatTreeSwitchSh() override;
+    FatTreeSwitchShMp(EventList& eventlist, string s, switch_type t, uint32_t id,simtime_picosec switch_delay, FatTreeTopologyShMp* ft);
+    ~FatTreeSwitchShMp() override;
   
     virtual void receivePacket(Packet& pkt);
     virtual Route* getNextHop(Packet& pkt, BaseQueue* ingress_port);
@@ -120,7 +120,7 @@ public:
     static int8_t (*fn)(FibEntry*,FibEntry*);
 
     virtual void addHostPort(int addr, int flowid, PacketSink* transport_port);
-    virtual void addHostPortPlus(int addr, int flowid, PacketSink* transport_port);
+    virtual void addHostPortPlus(int addr, int flowid, PacketSink* transport_port, int level);
 
     virtual void permute_paths(vector<FibEntry*>* uproutes);
 
@@ -138,12 +138,12 @@ public:
 private:
     switch_type _type;
     Pipe* _pipe;
-    FatTreeTopologySh* _ft;
+    FatTreeTopologyShMp* _ft;
     
     //CAREFUL: can't always have a single FIB for all up destinations when there are failures!
     vector<FibEntry*>* _uproutes;
 
-    unordered_map<uint32_t,FlowletInfoSh*> _flowlet_maps;
+    unordered_map<uint32_t,FlowletInfoShMp*> _flowlet_maps;
 
     static unordered_map<BaseQueue*,uint32_t> _port_flow_counts;
 
@@ -153,8 +153,5 @@ private:
 
     unordered_map<Packet*,bool> _packets;
 };
-
-
-
 #endif
     

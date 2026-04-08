@@ -1,6 +1,5 @@
-// -*- c-basic-offset: 4; indent-tabs-mode: nil -*-
-#ifndef SH_FAT_TREE
-#define SH_FAT_TREE
+#ifndef SH_MP_FAT_TREE
+#define SH_MP_FAT_TREE
 #include "main.h"
 #include "randomqueue.h"
 #include "pipe.h"
@@ -13,7 +12,7 @@
 #include "eventlist.h"
 #include "switch.h"
 #include "uec.h"
-#include "fat_tree_switch_sh.h"
+#include "fat_tree_switch_sh_mp.h"
 #include <ostream>
 #include <memory>
 #include <optional>
@@ -33,32 +32,32 @@ typedef enum {UPLINK, DOWNLINK} link_direction;
 #define AGG_TIER 1
 #define CORE_TIER 2
 
-class FatTreeTopologySh;
+class FatTreeTopologyShMp;
 
 
-class FatTreeTopologyCfgSh {
-friend class FatTreeTopologySh;
-friend std::ostream &operator<<(std::ostream &os, FatTreeTopologyCfgSh const &m);
+class FatTreeTopologyCfgShMp {
+friend class FatTreeTopologyShMp;
+friend std::ostream &operator<<(std::ostream &os, FatTreeTopologyCfgShMp const &m);
 public:
-    FatTreeTopologyCfgSh(queue_type q, queue_type snd);
-    FatTreeTopologyCfgSh(istream& file, mem_b queue_size,
+    FatTreeTopologyCfgShMp(queue_type q, queue_type snd);
+    FatTreeTopologyCfgShMp(istream& file, mem_b queue_size,
                        queue_type q, queue_type snd);
-    FatTreeTopologyCfgSh(uint32_t tiers, uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize, 
+    FatTreeTopologyCfgShMp(uint32_t tiers, uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize, 
                        simtime_picosec latency, simtime_picosec switch_latency, 
                        queue_type q, queue_type snd);
-    FatTreeTopologyCfgSh(uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize,
+    FatTreeTopologyCfgShMp(uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize,
                        queue_type q);      
-    FatTreeTopologyCfgSh(uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize,
+    FatTreeTopologyCfgShMp(uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize,
                        queue_type q, uint32_t num_failed);      
-    FatTreeTopologyCfgSh(uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize, uint32_t fail,
+    FatTreeTopologyCfgShMp(uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize, uint32_t fail,
                        queue_type q, queue_type snd);
 
-    static unique_ptr<FatTreeTopologyCfgSh> load(string filename, mem_b queuesize, queue_type q_type, queue_type sender_q_type);
+    static unique_ptr<FatTreeTopologyCfgShMp> load(string filename, mem_b queuesize, queue_type q_type, queue_type sender_q_type);
     /*
      Check if all settings in the config are correct. Will abort and print an error message if not.
     */
     void check_consistency() const;
-    
+
     void set_tier_parameters(int tier, int radix_up, int radix_down, mem_b queue_up, mem_b queue_down, int bundlesize, linkspeed_bps downlink_speed, int oversub);
     void set_tier_parameters(int tier, int radix_up, int radix_down, mem_b queue_up, mem_b queue_down, int bundlesize, linkspeed_bps downlink_speed, int oversub, linkspeed_bps host_downlink_speed);
 
@@ -166,6 +165,8 @@ public:
     simtime_picosec get_two_point_diameter_latency(int src, int dst);
     simtime_picosec get_two_point_diameter_latency(int src, int dst, bool use_host_latency);
 
+    Route* getEcmpRoute(int src, int dst, uint32_t seed);
+
     uint16_t get_diameter() {return _diameter;}
 private:
     void initialize(uint32_t tiers, uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize,
@@ -185,7 +186,7 @@ private:
 
     // _link_latencies[0] is the ToR->host latency.
     simtime_picosec _link_latencies[3];
-    simtime_picosec _host_link_latency;
+    simtime_picosec _host_link_latency; // latency of host links (to ToR)
 
     // _switch_latencies[0] is the ToR switch latency.
     simtime_picosec _switch_latencies[3];
@@ -202,7 +203,7 @@ private:
     // Eg. _downlink_speeds[0] = 400Gbps indicates 400Gbps links from hosts
     // to ToRs.
     linkspeed_bps _downlink_speeds[3];
-    linkspeed_bps _downlink_speed_host;
+    linkspeed_bps _downlink_speed_host; // linkspeed of host downlinks (to ToR)
 
     // degree of oversubscription at tier.  Eg _oversub[TOR_TIER] = 3 implies 3x more bw to hosts than to agg switches.
     uint32_t _oversub[3];
@@ -236,20 +237,21 @@ private:
 };
 
 template<class P> void delete_3d_vector(vector<vector<vector<P*>>>& vec3d);
+template<class P> void delete_4d_vector(vector<vector<vector<vector<P*>>>>& vec4d);
 
-class FatTreeTopologySh: public Topology{
+class FatTreeTopologyShMp: public Topology{
 public:
-    FatTreeTopologySh(const FatTreeTopologyCfgSh* cfg,
+    FatTreeTopologyShMp(const FatTreeTopologyCfgShMp* cfg,
                     QueueLoggerFactory* logger_factory,
                     EventList* ev,
                     FirstFit * fit);
-    ~FatTreeTopologySh() override;
+    ~FatTreeTopologyShMp() override;
 
     vector <Switch*> switches_lp;
     vector <Switch*> switches_up;
     vector <Switch*> switches_c;
 
-    vector<Switch*> switches_host;
+    vector< vector<Switch*> > switches_host;
 
     vector<PacketSink*> host_transport_ports;
 
@@ -269,19 +271,21 @@ public:
     vector< vector< vector<BaseQueue*> > > queues_ns_nlp;
 
     // Collegamenti Host - HostSwitch
-    vector< vector< vector<Pipe*> > > pipes_nhs_nh;
-    vector< vector< vector<Pipe*> > > pipes_nh_nhs;
-    vector< vector< vector<BaseQueue*> > > queues_nhs_nh;
-    vector< vector< vector<BaseQueue*> > > queues_nh_nhs;
+    vector <vector< vector< vector<Pipe*> > > > pipes_nhs_nh;
+    vector <vector< vector< vector<Pipe*> > > >pipes_nh_nhs;
+    vector <vector< vector< vector<BaseQueue*> > > > queues_nhs_nh;
+    vector <vector< vector< vector<BaseQueue*> > > > queues_nh_nhs;
   
     QueueLoggerFactory* _logger_factory;
     EventList* _eventlist;
     FirstFit* _ff;
 
+    uint32_t NSH;
+
     virtual vector<const Route*>* get_bidir_paths(uint32_t src, uint32_t dest, bool reverse);
 
     BaseQueue* alloc_src_queue(QueueLogger* q);
-    BaseQueue* alloc_src_queueSh(QueueLogger* q);
+    BaseQueue* alloc_src_queueShMp(QueueLogger* q);
     BaseQueue* alloc_queue(QueueLogger* q, const mem_b queuesize, link_direction dir, int switch_tier, bool tor=false);
     BaseQueue* alloc_queue(QueueLogger* q, linkspeed_bps speed, const mem_b queuesize, link_direction dir,  int switch_tier, bool tor, bool reduced_speed);
     BaseQueue* alloc_queue_host(QueueLogger* queueLogger, const mem_b queuesize, link_direction dir, bool tor);
@@ -297,9 +301,10 @@ public:
 
     bool isOnSameEnhancedSwitch(uint32_t src, uint32_t dst) const;
 
-    const FatTreeTopologyCfgSh& cfg() { return *_cfg; };
+    const FatTreeTopologyCfgShMp& cfg() { return *_cfg; };
+    static const uint32_t PLANES = 6; // in packets
 private:
-    const FatTreeTopologyCfgSh* _cfg;
+    const FatTreeTopologyCfgShMp* _cfg;
     map<Queue*,int> _link_usage;
 
     int64_t find_lp_switch(Queue* queue);
@@ -308,6 +313,6 @@ private:
     int64_t find_destination(Queue* queue);
     void alloc_vectors();
 
-    static const uint32_t HOSTSWITCH_GPU_SIZE = 64;
+    static const uint32_t HOSTSWITCH_GPU_SIZE = 32;
 };
 #endif

@@ -7,7 +7,7 @@
 #include <iostream>
 #include "main.h"
 #include "queue.h"
-#include "fat_tree_switch.h"
+#include "fat_tree_switch_sh.h"
 #include "compositequeue.h"
 #include "aeolusqueue.h"
 #include "prioqueue.h"
@@ -60,6 +60,8 @@ std::ostream &operator<<(std::ostream &os, FatTreeTopologyCfgSh const &m) {
             << " switch_latencies=" << m._switch_latencies[tier]
             << " bundlesize=" << m._bundlesize[tier]
             << " downlink_speeds=" << m._downlink_speeds[tier]
+            << " downlink_speed_host=" << m._downlink_speed_host
+            << " host_link_latency=" << m._host_link_latency
             << " oversub=" << m._oversub[tier]
             << " radix_down=" << m._radix_down[tier]
             << " queue_down=" << m._queue_down[tier];
@@ -72,7 +74,6 @@ std::ostream &operator<<(std::ostream &os, FatTreeTopologyCfgSh const &m) {
 
     return os;
 }
-
 
 FatTreeTopologyCfgSh::FatTreeTopologyCfgSh(queue_type q, queue_type snd):
                         _from_file(false),
@@ -90,6 +91,8 @@ FatTreeTopologyCfgSh::FatTreeTopologyCfgSh(queue_type q, queue_type snd):
                         _switch_latencies{0,0,0},
                         _bundlesize{1,1,1},
                         _downlink_speeds{0,0,0},
+                        _host_link_latency(0),
+                        _downlink_speed_host(0),
                         _oversub{1,1,1},
                         _radix_down{0,0,0},
                         _radix_up{0,0},
@@ -402,6 +405,23 @@ FatTreeTopologyCfgSh::set_tier_parameters(int tier, int radix_up, int radix_down
     // xxx what to do about queue sizes
 }
 
+void
+FatTreeTopologyCfgSh::set_tier_parameters(int tier, int radix_up, int radix_down, mem_b queue_up, mem_b queue_down, int bundlesize, linkspeed_bps linkspeed, int oversub, linkspeed_bps host_downlink_speed){
+    // tier is 0 for ToR, 1 for agg switch, 2 for core switch
+    if (tier < CORE_TIER) {
+        // no uplinks from core switches
+        _radix_up[tier] = radix_up;
+        _queue_up[tier] = queue_up;
+    }
+    _radix_down[tier] = radix_down;
+    _queue_down[tier] = queue_down;
+    _bundlesize[tier] = bundlesize;
+    _downlink_speeds[tier] = linkspeed; // this is the link going downwards from this tier.  up/down linkspeeds are symmetric.
+    _oversub[tier] = oversub;
+    _downlink_speed_host = host_downlink_speed;
+    // xxx what to do about queue sizes
+}
+
 void FatTreeTopologyCfgSh::set_linkspeeds(linkspeed_bps linkspeed) {
     if (linkspeed != 0 && _downlink_speeds[TOR_TIER] != 0 && linkspeed != _downlink_speeds[TOR_TIER]) {
         cerr << "Don't set linkspeeds using both the constructor and set_tier_parameters - use only one of the two\n";
@@ -415,6 +435,7 @@ void FatTreeTopologyCfgSh::set_linkspeeds(linkspeed_bps linkspeed) {
     if (_downlink_speeds[TOR_TIER] == 0) { _downlink_speeds[TOR_TIER] = linkspeed;}
     if (_downlink_speeds[AGG_TIER] == 0) { _downlink_speeds[AGG_TIER] = linkspeed;}
     if (_downlink_speeds[CORE_TIER] == 0) { _downlink_speeds[CORE_TIER] = linkspeed;}
+    if (_downlink_speed_host == 0) { _downlink_speed_host = linkspeed;}
 }
 
 void FatTreeTopologyCfgSh::set_queue_sizes(mem_b queuesize) {
@@ -553,6 +574,11 @@ simtime_picosec FatTreeTopologyCfgSh::get_two_point_diameter_latency(int src, in
     return diameter_latency_end_point;
 }
 
+simtime_picosec FatTreeTopologyCfgSh::get_two_point_diameter_latency(int src, int dst, bool use_host_latency) {
+
+    return use_host_latency ? _host_link_latency : get_two_point_diameter_latency(src, dst);
+}
+
 unique_ptr<FatTreeTopologyCfgSh> FatTreeTopologyCfgSh::load(string filename,
                                                         mem_b queuesize,
                                                         queue_type q_type,
@@ -632,7 +658,25 @@ void FatTreeTopologyCfgSh::read_cfg(istream& file, mem_b queuesize) {
         to_lower(tokens[0]);
         if (tokens.size() == 0 || tokens[0][0] == '#') {
             continue;
-        } else if (tokens[0] == "tier") {
+        } 
+        else if(tokens[0] == "hosts"){
+            continue;
+        }
+        else if (tokens[0] == "downlink_speed_host_gbps") {
+            if (_downlink_speed_host != 0) {
+                cerr << "Duplicate linkspeed setting for host at line " << linecount << endl;
+                exit(1);
+            }
+            _downlink_speed_host = ((linkspeed_bps)stoi(tokens[1])) * 1000000000;
+        }
+        else if (tokens[0] == "downlink_latency_host_ns") {
+            if (_host_link_latency != 0) {
+                cerr << "Duplicate link latency setting for host at line " << linecount << endl;
+                exit(1);
+            }
+            _host_link_latency = timeFromNs(stoi(tokens[1]));
+        }
+        else if (tokens[0] == "tier") {
             current_tier = stoi(tokens[1]);
             if (current_tier < 0 || current_tier > 2) {
                 cerr << "Invalid tier " << current_tier << " at line " << linecount << endl;
@@ -743,6 +787,14 @@ void FatTreeTopologyCfgSh::check_consistency() const {
             cerr << "Missing downlink_speed_gbps for tier " << tier << endl;
             exit(1);
         }
+        if(_downlink_speed_host == 0){
+            cerr << "Missing downlink_speed_gbps for host" << endl;
+            exit(1);
+        }
+        if(_host_link_latency == 0){
+            cerr << "Missing downlink_latency_ns for host" << endl;
+            exit(1);
+        }
         if (_link_latencies[tier] == 0) {
             cerr << "Missing downlink_latency_ns for tier " << tier << endl;
             exit(1);
@@ -850,7 +902,7 @@ FatTreeTopologySh::FatTreeTopologySh(const FatTreeTopologyCfgSh* cfg,
     }
     for (uint32_t j=0;j<NSH;j++){
         simtime_picosec switch_latency = (_cfg->_switch_latencies[CORE_TIER] > 0) ? _cfg->_switch_latencies[TOR_TIER] : _cfg->_switch_latency;
-        switches_host[j] = new FatTreeSwitchSh(*_eventlist, "Switch_HOST_"+ntoa(j), FatTreeSwitchSh::SUPER,j,switch_latency/2,this);
+        switches_host[j] = new FatTreeSwitchSh(*_eventlist, "Switch_HOST_"+ntoa(j), FatTreeSwitchSh::SCALEUPSW,j,switch_latency/2,this);
     }
   
     
@@ -870,10 +922,10 @@ FatTreeTopologySh::FatTreeTopologySh(const FatTreeTopologyCfgSh* cfg,
                 queueLogger = NULL;
             }
         
-            queues_nhs_nh[sr][h][b] = alloc_queue(queueLogger,_cfg->_downlink_speeds[TOR_TIER] * 2, _cfg->_queue_down[TOR_TIER] * 2, DOWNLINK, TOR_TIER, true, false);
+            queues_nhs_nh[sr][h][b] = alloc_queue_host(queueLogger,_cfg->_downlink_speed_host, DOWNLINK, true);
             queues_nhs_nh[sr][h][b]->setName("HSRC" + ntoa(sr) + "->DST" +ntoa(h) + "(" + ntoa(b) + ")");
             //if (logfile) logfile->writeName(*(queues_nh_nhs[h][sr]));
-            simtime_picosec hop_latency = (_cfg->_hop_latency == 0) ? _cfg->_link_latencies[TOR_TIER] : _cfg->_hop_latency;
+            simtime_picosec hop_latency = (_cfg->_hop_latency == 0) ? _cfg -> _host_link_latency : _cfg->_hop_latency;
             pipes_nhs_nh[sr][h][b] = new Pipe(hop_latency, *_eventlist);
             pipes_nhs_nh[sr][h][b]->setName("Pipe-HSRC" + ntoa(sr) + "->DST" + ntoa(h) + "(" + ntoa(b) + ")");
             //if (logfile) logfile->writeName(*(pipes_nh_nhs[h][sr]));
@@ -884,7 +936,7 @@ FatTreeTopologySh::FatTreeTopologySh(const FatTreeTopologyCfgSh* cfg,
             } else {
                 queueLogger = NULL;
             }
-            queues_nh_nhs[h][sr][b] = alloc_src_queue(queueLogger);
+            queues_nh_nhs[h][sr][b] = alloc_src_queueSh(queueLogger);
             queues_nh_nhs[h][sr][b]->setName("DST" + ntoa(h) + "->HSRC" +ntoa(sr) + "(" + ntoa(b) + ")");
             //cout << queues_nhs_nh[sr][h][b]->str() << endl;
             //if (logfile) logfile->writeName(*(queues_nhs_nh[sr][h]));
@@ -1253,6 +1305,27 @@ BaseQueue* FatTreeTopologySh::alloc_src_queue(QueueLogger* queueLogger){
     }
 }
 
+BaseQueue* FatTreeTopologySh::alloc_src_queueSh(QueueLogger* queueLogger){
+    linkspeed_bps linkspeed = _cfg->_downlink_speed_host; // linkspeeds are symmetric
+    switch (_cfg->_sender_qt) {
+    case SWIFT_SCHEDULER:
+        return new FairScheduler(linkspeed, *_eventlist, queueLogger);
+    case PRIORITY:
+        return new PriorityQueue(linkspeed,
+                                 memFromPkt(FEEDER_BUFFER), *_eventlist, queueLogger);
+    case FAIR_PRIO:
+        return new FairPriorityQueue(linkspeed,
+                                     memFromPkt(FEEDER_BUFFER), *_eventlist, queueLogger);
+    default:
+        abort();
+    }
+}
+
+BaseQueue* FatTreeTopologySh::alloc_queue_host(QueueLogger* queueLogger, const mem_b queuesize,
+                                        link_direction dir, bool tor){
+    return alloc_queue(queueLogger, _cfg->_downlink_speed_host, queuesize, dir, TOR_TIER, tor, false);
+}
+
 BaseQueue* FatTreeTopologySh::alloc_queue(QueueLogger* queueLogger, const mem_b queuesize,
                                         link_direction dir, int switch_tier, bool tor){
     if (dir == UPLINK) {
@@ -1371,7 +1444,7 @@ vector<const Route*>* FatTreeTopologySh::get_bidir_paths(uint32_t src, uint32_t 
     //pqueue->setName("PQueue_" + ntoa(src) + "_" + ntoa(dest));
     //logfile->writeName(*pqueue);
 
-    if (HOSTSWITCH_ID(src) == HOSTSWITCH_ID(dest) && src != dest) {
+    /* if (HOSTSWITCH_ID(src) == HOSTSWITCH_ID(dest) && src != dest) {
         uint32_t sr = HOSTSWITCH_ID(src);
 
         // forward: SRC -> SR -> DST
@@ -1398,13 +1471,13 @@ vector<const Route*>* FatTreeTopologySh::get_bidir_paths(uint32_t src, uint32_t 
             routeback->push_back(pipes_nhs_nh[sr][src][0]);
             routeout->set_reverse(routeback);
             routeback->set_reverse(routeout);
-        }
+        
         paths->push_back(routeout);
         check_non_null(routeout);
         return paths;
-    }
+    } */
 
-    else if (_cfg->HOST_POD_SWITCH(src)==_cfg->HOST_POD_SWITCH(dest)){
+    if (_cfg->HOST_POD_SWITCH(src)==_cfg->HOST_POD_SWITCH(dest)){
   
         // forward path
         routeout = new Route();

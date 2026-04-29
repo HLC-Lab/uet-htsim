@@ -16,7 +16,7 @@ public:
         
         IncPacket* p = _packetdb.allocPacket();
         
-        // Inizializzazione parametri base
+        // Base parameter initialization
         p->_type = p_type;
         p->_is_inc = true;
         p->_inc_job_id = job_id;
@@ -36,9 +36,8 @@ public:
         _packetdb.freePacket(this);
     }
 
-    // Obbligatorio per htsim
     PktPriority priority() const override {
-        return PRIO_MID; // Priorità media per non bloccare i controlli ma stare sopra i dati standard
+        return PRIO_MID; // Medium priority to avoid blocking control traffic while staying above standard data
     }
 
     void make_result() {

@@ -11,7 +11,7 @@ public:
                       QueueLogger* logger, uint16_t trim_size, bool disable_trim)
         : CompositeQueue(bitrate, maxsize, eventlist, logger, trim_size, disable_trim) {}
 
-    // L'unica cosa che cambiamo è la ricezione
+    // The only thing we’re overriding is the reception
     void receivePacket(Packet& pkt) override;
 };
 

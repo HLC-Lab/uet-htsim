@@ -2,13 +2,13 @@
 #ifndef UEC_INC_SRC_H
 #define UEC_INC_SRC_H
 
-#include "uec.h"
+#include "inc_uec.h"
 
 class UecIncNIC : public UecNIC {
 public:
     UecIncNIC(id_t src_num, EventList& eventList, linkspeed_bps linkspeed, uint32_t ports);
 
-    // Override dell'evento di fine trasmissione per iniettare la priorità INC
+    // Override of the end-of-transmission event to inject INC priority
     void doNextEvent() override;
 };
 
@@ -21,12 +21,12 @@ public:
               uint32_t no_of_ports, 
               bool rts = false);
 
-    // Override dei metodi per iniettare la logica INC
+    // Override of this method to have INC logic
     virtual void receivePacket(Packet& pkt, uint32_t portnum) override;
     virtual mem_b sendNewPacket(const Route& route) override;
     virtual mem_b sendRtxPacket(const Route& route) override;
 
-    // Metodi di inizializzazione specifici per INC (aggressivi)
+    // Inizialization method for INC
     void initIncNscc(mem_b cwnd, simtime_picosec peer_rtt);
 };
 

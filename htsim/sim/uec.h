@@ -1,6 +1,6 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*-
-#ifndef INC_UEC_H
-#define INC_UEC_H
+#ifndef UEC_H
+#define UEC_H
 
 #include <memory>
 #include <list>

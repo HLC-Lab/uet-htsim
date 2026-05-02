@@ -2,12 +2,12 @@
 #ifndef _INCTOPOLOGY_H
 #define _INCTOPOLOGY_H
 
-#include "fat_tree_topology.h"
+#include "inc_fat_tree_topology.h"
 #include "inc_switch.h"
 
-class IncTopology : public FatTreeTopology {
+class IncTopology : public IncFatTreeTopology {
 public:
-    IncTopology(const FatTreeTopologyCfg* cfg, 
+    IncTopology(const IncFatTreeTopologyCfg* cfg, 
                 QueueLoggerFactory* logger_factory, 
                 EventList* ev, 
                 FirstFit* fit);

@@ -2,7 +2,7 @@
 #ifndef UEC_INC_SRC_H
 #define UEC_INC_SRC_H
 
-#include "inc_uec.h"
+#include "uec.h"
 
 class UecIncNIC : public UecNIC {
 public:

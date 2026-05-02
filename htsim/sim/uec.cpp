@@ -1,5 +1,5 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*-
-#include "uec.h"
+#include "inc_uec.h"
 #include <math.h>
 #include <cstdint>
 #include "circular_buffer.h"
@@ -1387,6 +1387,7 @@ void UecSrc::dontUpdateCwndOnNack(bool skip, mem_b nacked_bytes, bool last_hop) 
 }
 
 void UecSrc::update_base_rtt(simtime_picosec raw_rtt){
+    if (_dstaddr == UINT32_MAX) return;
     if (_base_rtt > raw_rtt) {
         _base_rtt = raw_rtt;
         _bdp = timeAsUs(raw_rtt) * _nic.linkspeed() / 8000000; 

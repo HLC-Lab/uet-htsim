@@ -1,14 +1,14 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*-
 #include "inc_switch.h"
 #include "network.h"
-#include "fat_tree_topology.h"
+#include "inc_fat_tree_topology.h"
 #include "uec.h"
 
 
 vector<uint32_t> IncSwitch::_job_participants;
 
-IncSwitch::IncSwitch(EventList& eventlist, string s, switch_type t, uint32_t id, simtime_picosec delay, FatTreeTopology* ft)
-    : FatTreeSwitch(eventlist, s, t, id, delay, ft) {
+IncSwitch::IncSwitch(EventList& eventlist, string s, switch_type t, uint32_t id, simtime_picosec delay, IncFatTreeTopology* ft)
+    : IncFatTreeSwitch(eventlist, s, t, id, delay, ft) {
 }
 
 void IncSwitch::add_job_participant(uint32_t host_id) {
@@ -38,7 +38,7 @@ void IncSwitch::receivePacket(Packet& pkt) {
     }
 
 
-    FatTreeSwitch::receivePacket(pkt);
+    IncFatTreeSwitch::receivePacket(pkt);
 }
 
 bool IncSwitch::hasUpLinks(){  

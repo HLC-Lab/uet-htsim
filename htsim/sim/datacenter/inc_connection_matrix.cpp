@@ -892,11 +892,11 @@ bool IncConnectionMatrix::load(istream& file){
                         if (tokens[i] == "switch_type") {
                                 i++;
                                 if (tokens[i]=="TOR")
-                                        f->switch_type = FatTreeSwitch::TOR;
+                                        f->switch_type = IncFatTreeSwitch::TOR;
                                 else if (tokens[i]=="AGG")
-                                        f->switch_type = FatTreeSwitch::AGG;
+                                        f->switch_type = IncFatTreeSwitch::AGG;
                                 else if (tokens[i]=="CORE")
-                                        f->switch_type = FatTreeSwitch::CORE;
+                                        f->switch_type = IncFatTreeSwitch::CORE;
                                 else {
                                         cout << "Unknown switch type " << tokens[i] << ", expecting one of TOR, AGG or CORE "<<endl;
                                         exit(1);

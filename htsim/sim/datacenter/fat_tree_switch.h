@@ -132,7 +132,7 @@ public:
     static double _speculative_threshold_fraction;
     static uint16_t _trim_size;
     static bool _disable_trim;
-protected:
+private:
     switch_type _type;
     Pipe* _pipe;
     FatTreeTopology* _ft;

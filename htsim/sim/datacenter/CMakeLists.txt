@@ -3,13 +3,16 @@ set(LIB_SOURCES
     firstfit.cpp
     vl2_topology.cpp
     fat_tree_topology.cpp
+    inc_fat_tree_topology.cpp
     bcube_topology.cpp
     connection_matrix.cpp
+    inc_connection_matrix.cpp
     oversubscribed_fat_tree_topology.cpp
     shortflows.cpp
     multihomed_fat_tree_topology.cpp
     star_topology.cpp
     fat_tree_switch.cpp
+    inc_fat_tree_switch.cpp
     dragon_fly_topology.cpp
     generic_topology.cpp
     dragonfly_plus_topology.cpp
@@ -53,6 +56,9 @@ set_property(TARGET htsim_hpcc PROPERTY EXCLUDE_FROM_ALL TRUE)
 add_executable(htsim_eqds main_eqds.cpp)
 set_property(TARGET htsim_eqds PROPERTY EXCLUDE_FROM_ALL TRUE)
 
+add_executable(htsim_inc_uec main_inc_uec.cpp)
+set_property(TARGET htsim_inc_uec PROPERTY EXCLUDE_FROM_ALL TRUE)
+
 add_executable(htsim_uec main_uec.cpp)
 
 # -------------------------------
@@ -66,6 +72,7 @@ set (ALL_EXECUTABLES
     htsim_swift
     htsim_hpcc
     htsim_eqds
+    htsim_inc_uec
     htsim_uec
 )
 foreach(EXECUTABLE ${ALL_EXECUTABLES})

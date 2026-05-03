@@ -11,11 +11,11 @@ using namespace std;
 
 UecIncNIC::UecIncNIC(id_t src_num, EventList& eventList, linkspeed_bps linkspeed, uint32_t ports)
     : UecNIC(src_num, eventList, linkspeed, ports) {
-    // Il costruttore chiama la base, le variabili protected sono accessibili
+    // The constructor calls the base class, protected variables are accessible
 }
 
 void UecIncNIC::doNextEvent() {
-    // 1. Trova e libera la porta
+    // 1. Find and release the port
     uint32_t last_port = _no_of_ports;
     for (uint32_t p = 0; p < _no_of_ports; p++) {
         if (_ports[p].busy && _ports[p].send_end_time == eventlist().now()) {
@@ -27,7 +27,7 @@ void UecIncNIC::doNextEvent() {
     _busy_ports--;
     _ports[last_port].busy = false;
 
-    // --- PRIORITÀ 1: TRAFFICO INC (All-Reduce) ---
+    // --- PRIORITY 1: INC TRAFFIC (All-Reduce) ---
     if (!_active_srcs.empty()) {
         for (auto it = _active_srcs.begin(); it != _active_srcs.end(); ++it) {
             if ((*it)->dst() == UINT32_MAX) { 
@@ -40,7 +40,7 @@ void UecIncNIC::doNextEvent() {
         }
     }
 
-    // --- PRIORITÀ 2 e 3: Traffico Standard (Copia esatta da uec.cpp) ---
+    // --- PRIORITY 2 e 3: Standard traffic like in uec.cpp ---
     if (!_active_srcs.empty() && !_control.empty()) {
         _crt++;
         if (_crt >= (_ratio_control + _ratio_data))
@@ -79,20 +79,19 @@ UecIncSrc::UecIncSrc(TrafficLogger* trafficLogger,
                      bool rts)
     : UecSrc(trafficLogger, eventList, move(mp), nic, no_of_ports, rts) 
 {
-    // Destinazione fittizia per triggerare la logica INC negli switch
+    // Placeholder destination to trigger the INC logic in each switch
     setDst(UINT32_MAX);
     _nodename = "UecIncSrc " + to_string(_node_num);
 }
 
 void UecIncSrc::initIncNscc(mem_b cwnd, simtime_picosec peer_rtt) {
-    // Configurazione aggressiva per INC
+    // Aggressive configuration for INC
     _sender_based_cc = true;
-    _receiver_based_cc = false; // All-Reduce solitamente non aspetta Pull
+    _receiver_based_cc = false; 
 
-    // Eseguiamo il setup base ereditato
     initNscc(cwnd, peer_rtt);
 
-    // Sovrascriviamo per All-Reduce: Fast Start massiccio
+    // Overrite All-Reduce: Fast Start 
     double multiplier = 10.0;
     setMaxWnd(multiplier * _bdp);
     setConfiguredMaxWnd(multiplier * _bdp);
@@ -139,24 +138,22 @@ void UecIncSrc::receivePacket(Packet& pkt, uint32_t portnum) {
 }
 
 mem_b UecIncSrc::sendNewPacket(const Route& route) {
-    // Qui dobbiamo marcare i pacchetti come INC prima che vengano inviati
-    // Per farlo in modo pulito, dobbiamo fare l'override della logica di creazione.
+    // Override packet creation to mark them before sending
     
-    // NOTA: Poiché in uec.cpp sendNewPacket crea il pacchetto e lo invia subito,
-    // dobbiamo copiare qui la logica di creazione originale e aggiungere i tag INC:
+    // NOTE: in uec.cpp sendNewPacket create and send packet, so we need to rewrite this logic and add the mark
     
     mem_b full_pkt_size = _mtu;
     if (_backlog < _mtu) full_pkt_size = _backlog;
 
-    // Creazione del pacchetto dati standard
+    // Creation of packet
     UecDataPacket* p = UecDataPacket::newpkt(_flow, route, _highest_sent, full_pkt_size, 
                                             UecDataPacket::DATA_SPEC, _pull_target, _dstaddr);
 
-    // --- AGGIUNTA TAG INC ---
+    // --- ADD TAG INC ---
     p->_is_inc = true;
-    p->_inc_job_id = 100; // Esempio ID Job
+    p->_inc_job_id = 100; // ID Job
     p->_inc_block_id = _highest_sent;
-    p->_inc_int_data = (rand() % 100) + 1; // Dato simulato
+    p->_inc_int_data = (rand() % 100) + 1; 
     p->_inc_last_switch_id = -1;
 
     uint16_t ev = _mp->nextEntropy(_highest_sent, (uint64_t)_cwnd/_mss);

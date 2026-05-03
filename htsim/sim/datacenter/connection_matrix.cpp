@@ -5,7 +5,6 @@
 #include <iostream>
 #include "math.h"
 #include <memory>
-#include "inc_switch.h"
 
 ConnectionMatrix::ConnectionMatrix(uint32_t n)
 {
@@ -746,15 +745,7 @@ bool ConnectionMatrix::load(istream& file){
             c->recv_done_trigger = 0;
             c->trigger = 0;
             c->src = stoi(tokens[0]);
-            string destination_part = tokens[0].substr(dstix);
-            if(destination_part=="#"){
-                // questo è un flow con destinazione esterna, che non è rappresentata da un ID numerico. Usiamo UINT32_MAX come segnaposto per indicare questo fatto.
-                c->dst=UINT32_MAX;
-                // aggiungiamo il source alla lista dei partecipanti del job, in modo che quando questo flow partirà potremo assegnargli un ID di destinazione univoco.
-                IncSwitch::add_job_participant(c->src);
-            } else {
-                c->dst = stoi(destination_part);
-            }
+            c->dst = stoi(tokens[0].substr(dstix));
             c->priority = 2000000;
             c->start = NO_START;
             for (size_t i = 1; i < tokens.size(); i++) {
@@ -978,4 +969,3 @@ ConnectionMatrix::getTrigger(triggerid_t id, EventList& eventlist) {
     }
     return t->trigger;
 }
-

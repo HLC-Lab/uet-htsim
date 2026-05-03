@@ -3,10 +3,10 @@ set(LIB_SOURCES
     firstfit.cpp
     vl2_topology.cpp
     fat_tree_topology.cpp
-    inc_fat_tree_topology.cpp
     fat_tree_topology_mg.cpp
     fat_tree_topology_sh.cpp
     fat_tree_topology_sh_mp.cpp
+    inc_fat_tree_topology.cpp
     bcube_topology.cpp
     connection_matrix.cpp
     inc_connection_matrix.cpp
@@ -15,10 +15,10 @@ set(LIB_SOURCES
     multihomed_fat_tree_topology.cpp
     star_topology.cpp
     fat_tree_switch.cpp
-    inc_fat_tree_switch.cpp
     fat_tree_switch_mg.cpp
     fat_tree_switch_sh.cpp
     fat_tree_switch_sh_mp.cpp
+    inc_fat_tree_switch.cpp
     dragon_fly_topology.cpp
     generic_topology.cpp
     dragonfly_plus_topology.cpp

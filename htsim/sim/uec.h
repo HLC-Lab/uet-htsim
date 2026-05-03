@@ -22,7 +22,7 @@
 //  *** don't change this default - override it by calling UecSrc::setMinRTO()
 #define DEFAULT_UEC_RTO_MIN 100
 
-static const unsigned uecMaxInFlightPkts = 1 << 14;
+static const unsigned uecMaxInFlightPkts = 1 << 16;
 class UecPullPacer;
 class UecSink;
 class UecSrc;
@@ -65,7 +65,7 @@ public:
     virtual const string& nodename() const {return _nodename;}
     list<UecSrc*> _active_srcs;
 
-private:
+protected:
     void sendControlPktNow();
     uint32_t sendOnFreePortNow(simtime_picosec endtime, const Route* rt);
     list<struct CtrlPacket> _control;
@@ -149,9 +149,9 @@ public:
     virtual void connectPort(uint32_t portnum, Route& routeout, Route& routeback, UecSink& sink, simtime_picosec start);
     const Route* getPortRoute(uint32_t port_num) const {return _ports[port_num]->route();}
     UecSrcPort* getPort(uint32_t port_num) {return _ports[port_num];}
-    void timeToSend(const Route& route);
-    void receivePacket(Packet& pkt, uint32_t portnum);
-    void doNextEvent();
+    virtual void timeToSend(const Route& route);
+    virtual void receivePacket(Packet& pkt, uint32_t portnum);
+    virtual void doNextEvent();
     uint32_t dst() { return _dstaddr; }
     void setDst(uint32_t dst) { _dstaddr = dst; }
 
@@ -236,7 +236,7 @@ public:
     bool _debug_src;
     bool debug() const { return _debug_src; }
 
-   private:
+   protected:
     unique_ptr<UecMultipath> _mp;
     UecNIC& _nic;
     uint32_t _no_of_ports;
@@ -264,8 +264,8 @@ public:
     bool isSendPermitted();
     void sendIfPermitted();
     mem_b sendPacket(const Route& route);
-    mem_b sendNewPacket(const Route& route);
-    mem_b sendRtxPacket(const Route& route);
+    virtual mem_b sendNewPacket(const Route& route);
+    virtual mem_b sendRtxPacket(const Route& route);
     void sendRTS();
     void sendProbe();
     void createSendRecord(UecDataPacket::seq_t seqno, mem_b pkt_size);
@@ -373,7 +373,7 @@ public:
     static simtime_picosec _adjust_period_threshold;
     //debug
     static flowid_t _debug_flowid;
-private:
+protected:
     bool quick_adapt(bool is_loss, bool skip, simtime_picosec delay);
     void fair_increase(uint32_t newly_acked_bytes);
     void proportional_increase(uint32_t newly_acked_bytes,simtime_picosec delay);

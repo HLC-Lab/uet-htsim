@@ -969,4 +969,3 @@ ConnectionMatrix::getTrigger(triggerid_t id, EventList& eventlist) {
     }
     return t->trigger;
 }
-

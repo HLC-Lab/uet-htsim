@@ -120,6 +120,9 @@ set(SOURCE_FILES
     uecpacket.cpp
     uec_mp.cpp
     uec_pdcses.cpp
+    inc_composite_queue.cpp
+    incpacket.cpp
+    uec_inc_src.cpp
 )
 
 # Create static library

@@ -4,6 +4,27 @@
 #include "loggers.h"
 #include "eqds_logger.h"
 
+PacketManager::PacketManager() {};
+
+void PacketManager::add_packet(LoggedPacket* log_packet){
+    _packets_list.push_back(log_packet);
+}
+
+void PacketManager::dump_packets(){
+    cout<<"Writing log of "<<_packets_list.size()<<" packets"<<endl;
+    std::ostringstream oss;
+    for (const auto& log : _packets_list) {
+        oss << log->_port << "," << log->_timestamp << "," << log->_size << "," << log->_duration << "\n";
+    }
+
+    std::ofstream fout("packets.csv");
+    fout<<oss.str();
+    fout.close();
+    cout<<"Writing completed!"<<endl;
+}
+
+PacketManager LoggedPacket::_packet_manager;
+
 
 // LoggedManager is a way to keep track of all the Logged instances
 // that have been created so we can dump a map of IDs to Names to help

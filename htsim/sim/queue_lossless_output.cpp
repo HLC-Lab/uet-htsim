@@ -8,6 +8,7 @@
 #include "queue_lossless_input.h"
 
 int LosslessOutputQueue::_ecn_enabled = false;
+int LosslessOutputQueue::_log_packet_enabled = false;
 int LosslessOutputQueue::_K = 0;
 
 LosslessOutputQueue::LosslessOutputQueue(linkspeed_bps bitrate, mem_b maxsize, 
@@ -156,6 +157,28 @@ void LosslessOutputQueue::completeService(){
 
     //if (((uint64_t)timeAsUs(eventlist().now()))%5==0)
     //    cout << "Queue bandwidth utilization " << average_utilization() << "%" << endl;
+
+
+    if (_log_packet_enabled){
+        // Parse the nodename
+        string nodename = pkt->route()->at(0)->nodename();
+        string parsed_nodename;
+        bool write=false;
+        for(char c: nodename){
+            if(c==')'){
+                write=true;
+                continue;
+            }
+            if(c=='(' && write){
+                break;
+            }
+            if(write){
+                parsed_nodename+=c;
+            }
+        }
+
+        new LoggedPacket(parsed_nodename,std::to_string(timeAsUs(eventlist().now())),std::to_string(pkt->size()), std::to_string(drainTime(pkt)));
+    }
 
     /* tell the packet to move on to the next pipe */
     pkt->sendOn();

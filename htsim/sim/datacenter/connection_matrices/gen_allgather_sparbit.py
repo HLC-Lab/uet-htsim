@@ -1,5 +1,5 @@
-# Generate a recoursive doubling reduce-scatter traffic matrix.
-# python gen_reducescatter_recdub.py <filename> <nodes> <conns> <flowsize>
+# Generate a sparbit allgather traffic matrix.
+# python gen_allgather_sparbit.py <filename> <nodes> <conns> <flowsize>
 # Parameters:
 # <nodes>   number of nodes in the topology
 # <conns>    number of active connections
@@ -9,7 +9,7 @@ import sys
 import math
 
 if len(sys.argv) != 5:
-    print("Usage: python gen_reducescatter_recdub.py <filename> <nodes> <conns> <flowsize>")
+    print("Usage: python gen_allgather_sparbit.py <filename> <nodes> <conns> <flowsize>")
     sys.exit()
 filename = sys.argv[1]
 nodes = int(sys.argv[2])
@@ -30,12 +30,10 @@ id = 0
 trig_id = 1
 for n in range(0,conns):
     src=n
-    for step in range(int(math.log2(conns))):
+    level = 0
+    for step in reversed(range(int(math.log2(conns)))):
         dist=2**step
         id+=1
-
-        if step!=0:
-            src=dst
 
         if math.floor(src/dist)%2==0:
             dst=src+dist
@@ -44,21 +42,22 @@ for n in range(0,conns):
 
         out = str(src) + "->" + str(dst) + " id " + str(id)
 
-        if step == 0:
+        if step == int(math.log2(conns)) - 1:
             out = out + " start 0"
         else:
             out = out + " trigger " + str(trig_id)
             trig_id += 1
 
-        out = out + " size " + str(int(flowsize-((flowsize/conns)*(2**step))))
+        out = out + " size " + str(int((flowsize/conns)*(2**level)))
 
-        if step != int(math.log2(conns))-1:
+        if level != int(math.log2(conns))-1:
             out = out + " send_done_trigger " + str(trig_id)
         print(out, file=f)
+        src = dst
+        level += 1
 
 for t in range(1, trig_id):
     out = "trigger id " + str(t) + " oneshot"
     print(out, file=f)
 
 f.close()
-

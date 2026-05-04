@@ -118,6 +118,7 @@ public:
     //debugging hack
     void log_me();
     bool _log_me;
+    static int _log_packet_enabled;
 
     static uint32_t _global_node_count; 
     static uint32_t _global_rto_count;  // keep track of the total number of timeouts across all srcs
@@ -166,6 +167,8 @@ public:
 
     void set_src(uint32_t s) {_srcaddr = s;}
     void set_dst(uint32_t s) {_dstaddr = s;}
+
+    simtime_picosec get_ps_per_byte() { return (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);}
  
     RoceSrc* _src;
 
@@ -177,6 +180,8 @@ public:
     uint32_t _dstaddr;
 
     static bool ooo_enabled;
+    static int _log_packet_enabled;
+    static linkspeed_bps _bitrate;
 
     ModularVector<uint8_t, roceMaxReorder> _epsn_rx_bitmap;  // list of packets above a hole, that we've received
 

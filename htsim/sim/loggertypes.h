@@ -21,6 +21,29 @@ class MultipathTcpSrc;
 class Logfile;
 class RawLogEvent;
 class Logged;
+class LoggedPacket;
+
+class PacketManager{
+public:
+    PacketManager();
+    void add_packet(LoggedPacket* log_packet);
+    void dump_packets();
+private:
+    vector<LoggedPacket*> _packets_list;
+};
+
+class LoggedPacket{
+public:
+    LoggedPacket(const string& port, const string& timestamp, const string& size, const string& duration) {_port=port; _timestamp=timestamp; _size=size; _duration=duration; _packet_manager.add_packet(this);}
+    virtual ~LoggedPacket() {}
+    string _port;
+    string _timestamp;
+    string _size;
+    string _duration;
+    static void dump_packets() {_packet_manager.dump_packets();}
+private:
+    static PacketManager _packet_manager;
+};
 
 // keep track of all logged items so we can do ID->Name mapping later
 class LoggedManager {

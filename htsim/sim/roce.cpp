@@ -20,6 +20,10 @@ using namespace std;
 //#define LOGSINK 2332
 #define LOGSINK   0 
 bool RoceSink::ooo_enabled = false;
+int RoceSink::_log_packet_enabled = false;
+linkspeed_bps RoceSink::_bitrate = speedFromMbps((double)100000);
+int RoceSrc::_log_packet_enabled = false;
+
 
 /* keep track of RTOs.  Generally, we shouldn't see RTOs if
    return-to-sender is enabled.  Otherwise we'll see them with very
@@ -304,6 +308,27 @@ void RoceSrc::send_packet() {
 
     //cout << "Sent " << _highest_sent+1 << " Flow Size: " << _flow_size << " Flow " << _name << " time " << timeAsUs(eventlist().now()) << endl;
 
+    if (_log_packet_enabled){
+        // Parse the nodename
+        string nodename = p->route()->at(0)->nodename();
+        string parsed_nodename;
+        bool write=false;
+        for(char c: nodename){
+            if(c==')'){
+                write=true;
+                continue;
+            }
+            if(c=='(' && write){
+                break;
+            }
+            if(write){
+                parsed_nodename+=c;
+            }
+        }
+        
+        new LoggedPacket(parsed_nodename,std::to_string(timeAsUs(eventlist().now())),std::to_string(p->size()), std::to_string(drainTime(p)));
+    }
+
     p->sendOn();
 }
 
@@ -465,6 +490,28 @@ void RoceSink::send_ack(simtime_picosec ts) {
     if (_log_me)
         cout << "Sink " << get_id() << " sending ack " << _cumulative_ack << endl;
     ack->set_pathid(0);
+
+    if (_log_packet_enabled){
+        // Parse the nodename
+        string nodename = ack->route()->at(0)->nodename();
+        string parsed_nodename;
+        bool write=false;
+        for(char c: nodename){
+            if(c==')'){
+                write=true;
+                continue;
+            }
+            if(c=='(' && write){
+                break;
+            }
+            if(write){
+                parsed_nodename+=c;
+            }
+        }
+
+        new LoggedPacket(parsed_nodename,std::to_string(timeAsUs(EventList::getTheEventList().now())),std::to_string(ack->size()), std::to_string(ack->size()*get_ps_per_byte()));
+    }
+
     ack->sendOn();
 }
 
@@ -478,6 +525,28 @@ void RoceSink::send_nack(simtime_picosec ts, RocePacket::seq_t ackno) {
     assert(nack);
     nack->flow().logTraffic(*nack,*this,TrafficLogger::PKT_CREATE);
     nack->set_ts(ts);
+
+    if (_log_packet_enabled){
+        // Parse the nodename
+        string nodename = nack->route()->at(0)->nodename();
+        string parsed_nodename;
+        bool write=false;
+        for(char c: nodename){
+            if(c==')'){
+                write=true;
+                continue;
+            }
+            if(c=='(' && write){
+                break;
+            }
+            if(write){
+                parsed_nodename+=c;
+            }
+        }
+
+        new LoggedPacket(parsed_nodename,std::to_string(timeAsUs(EventList::getTheEventList().now())),std::to_string(nack->size()), std::to_string(nack->size()*get_ps_per_byte()));
+    }
+
     nack->sendOn();
 }
 

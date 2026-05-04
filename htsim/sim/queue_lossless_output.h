@@ -38,6 +38,7 @@ private:
 public:
     static int _ecn_enabled;
     static int _K;
+    static int _log_packet_enabled;
 };
 
 #endif

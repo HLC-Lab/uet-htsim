@@ -55,7 +55,7 @@ EventList eventlist;
 
 void exit_error(char* progr) {
 #ifdef DRAGONFLY_PLUS
-    cout << "Usage " << progr << "[-radix K]\n\t[-nodes N]\n\t[-size s|m|l]\n\t[-q queue_size]\n\t[-queue_type composite|random|lossless|lossless_input|]\n\t[-tm traffic_matrix_file]\n\t[-strat route_strategy (minimal,fpar)]\n\t[-log log_level]\n\t[-linkspeed linkspeed]\n\t[-seed random_seed]\n\t[-end end_time_in_usec]\n\t[-mtu MTU]\n\t[-s x] to set dragonfly+ parameters\n\t[-l x] to set dragonfly+ parameters\n\t[-h x] to set dragonfly+ parameters\n\t[-p x] to set dragonfly+ parameters\n\t[-hop_latency x] per hop wire latency in us,default 1\n\t[-switch_latency x] switching latency in us, default 0\n\t[-start_delta] time in us to randomly delay the start of connections\n\t[-pfc_thresholds low high]" << endl;
+    cout << "Usage " << progr << "[-nodes N]\n\t[-size s|m|l]\n\t[-q queue_size]\n\t[-queue_type composite|random|lossless|lossless_input|]\n\t[-tm traffic_matrix_file]\n\t[-strat route_strategy (minimal,fpar)]\n\t[-log log_level]\n\t[-linkspeed linkspeed]\n\t[-seed random_seed]\n\t[-end end_time_in_usec]\n\t[-mtu MTU]\n\t[-s x] to set dragonfly+ parameters\n\t[-l x] to set dragonfly+ parameters\n\t[-h x] to set dragonfly+ parameters\n\t[-p x] to set dragonfly+ parameters\n\t[-hop_latency x] per hop wire latency in us,default 1\n\t[-switch_latency x] switching latency in us, default 0\n\t[-start_delta] time in us to randomly delay the start of connections\n\t[-pfc_thresholds low high]" << endl;
 #else
     cout << "Usage " << progr << " [-nodes N]\n\t[-q queue_size]\n\t[-queue_type composite|random|lossless|lossless_input|]\n\t[-tm traffic_matrix_file]\n\t[-strat route_strategy (single,\n\tecmp_host,ecmp_ar,\n\tecmp_host_ar ar_thresh)]\n\t[-log log_level]\n\t[-linkspeed linkspeed]\n\t[-seed random_seed]\n\t[-end end_time_in_usec]\n\t[-mtu MTU]\n\t[-hop_latency x] per hop wire latency in us,default 1\n\t[-switch_latency x] switching latency in us, default 0\n\t[-start_delta] time in us to randomly delay the start of connections\n\t[-pfc_thresholds low high]" << endl;
 #endif
@@ -101,6 +101,7 @@ int main(int argc, char **argv) {
     bool log_traffic = false;
     bool log_switches = false;
     bool log_queue_usage = false;
+    bool log_packet = false;
     RouteStrategy route_strategy = NOT_SET;
     int seed = 13;
     int i = 1;
@@ -121,11 +122,7 @@ int main(int argc, char **argv) {
             i++;
         } 
 #ifdef DRAGONFLY_PLUS
-        else if (!strcmp(argv[i],"-radix")) {
-            k_radix = atoi(argv[i+1]);
-            cout << "rotuer radix "<< k_radix << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-size")) {
+        else if (!strcmp(argv[i],"-size")) {
             if (!strcmp(argv[i+1],"s")){
                 topo_type = SMALL;
             } else if (!strcmp(argv[i+1],"m")){
@@ -229,6 +226,9 @@ int main(int argc, char **argv) {
             } else if (!strcmp(argv[i+1], "queue_usage")) {
                 cout << "logging queue usage\n";
                 log_queue_usage = true;
+            } else if (!strcmp(argv[i+1], "packet")) {
+                cout << "logging packet\n";
+                log_packet = true;
             } else {
                 exit_error(argv[0]);
             }
@@ -411,12 +411,21 @@ int main(int argc, char **argv) {
         FatTreeSwitch::_sticky_delta = timeFromUs(ar_sticky_delta);
     }
 
+    if (log_packet){
+        RoceSink::_log_packet_enabled = true;
+        RoceSink::_bitrate = linkspeed;
+    }
+
     LosslessInputQueue::_high_threshold = Packet::data_packet_size()*high_pfc;
     LosslessInputQueue::_low_threshold = Packet::data_packet_size()*low_pfc;
 
     if (dcqcn){
         LosslessOutputQueue::_ecn_enabled = true;
         LosslessOutputQueue::_K = ecn_threshold * Packet::data_packet_size();
+    }
+
+    if (log_packet){
+        LosslessOutputQueue::_log_packet_enabled = true;
     }
 
     eventlist.setEndtime(timeFromUs((uint32_t)end_time));
@@ -426,6 +435,19 @@ int main(int argc, char **argv) {
     if (topo_type!=SMALL){
         if(no_parallel_link != 1){
             fprintf(stderr, "It is not possible to change the number of parallel links if the Dragonfly+ Topology is not small\n");
+            exit(1);
+        }
+    }
+
+    if (s_df != 0 || l_df != 0 || h_df != 0 || p_df != 0) {
+        // If one is set, all must be set.
+        if (s_df == 0 || l_df == 0 || h_df == 0 || p_df == 0) {
+            fprintf(stderr, "All parameters (s, l, h, p) must be non-zero if any of them are set\n");
+            exit(1);
+        }
+
+        if ((s_df + p_df) != (h_df + l_df)){
+            fprintf(stderr, "Invalid (s, l, h, p) parameters: every switch must have the same router radix\n");
             exit(1);
         }
     }
@@ -478,6 +500,10 @@ int main(int argc, char **argv) {
     }
 
     RoceSrc::setMinRTO(1000); //increase RTO to avoid spurious retransmits
+
+    if (log_packet){
+        RoceSrc::_log_packet_enabled = true;
+    }
 
     RoceSrc* roceSrc;
     RoceSink* roceSnk;
@@ -785,6 +811,10 @@ int main(int argc, char **argv) {
     // GO!
     cout << "Starting simulation" << endl;
     while (eventlist.doNextEvent()) {
+    }
+
+    if (log_packet){
+        LoggedPacket::dump_packets();
     }
 
     cout << "Done" << endl;

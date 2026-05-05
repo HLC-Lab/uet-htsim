@@ -1,7 +1,10 @@
 # HLC-Lab htsim
 This repository is a fork of the official UEC repository, with the following features added:
-- More traffic matrices for different collective algorithms (developer: [Simone Lidonnici](https://github.com/SimoneLid))
+- More traffic matrices for different collective algorithms (developer: [Simone Lidonnici](https://github.com/SimoneLid) and [Chiara Di Stefano](https://github.com/chiaradistefano))
 - Dragonfly+ topology (developer: [Chiara Di Stefano](https://github.com/chiaradistefano))
+- Scale-up Network topologies (developer: [Francesco Saletti](https://github.com/FrancescoSaletti03))
+- In-Network Collectives (developer: [Christian Fraschetti](https://github.com/FrascaHoryzont) and [Chiara Di Stefano](https://github.com/chiaradistefano))
+- Packet logging and per-port statistics (developer: [Chiara Di Stefano](https://github.com/chiaradistefano) and [Simone Lidonnici](https://github.com/SimoneLid))
 
 The following features will be added in the next weeks:
 - Dynamic traffic visualization tools

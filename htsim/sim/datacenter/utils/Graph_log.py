@@ -4,14 +4,14 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 def genera_grafico_multi(dim_pacchetti, tempi_list, labels=None):
     """
-    Grafico principale lineare + inset zoomato sulle dimensioni piccole.
+    Main linear graph with an inset zoom for small message sizes.
     """
 
     epsilon = 1e-3
 
     for tempi in tempi_list:
         if len(tempi) != len(dim_pacchetti):
-            raise ValueError("Ogni lista di tempi deve avere la stessa lunghezza della lista delle dimensioni.")
+            raise ValueError("Each time list must have the same length as the packet size list.")
 
     if labels is None:
         labels = [f"Serie {i+1}" for i in range(len(tempi_list))]
@@ -19,7 +19,7 @@ def genera_grafico_multi(dim_pacchetti, tempi_list, labels=None):
     fig, ax = plt.subplots(figsize=(12, 6), constrained_layout=True)
 
     # -------------------------
-    # Grafico principale
+    # Main graph
     # -------------------------
     for tempi, label in zip(tempi_list, labels):
         ax.plot(dim_pacchetti, tempi, marker='o', label=label)
@@ -38,7 +38,7 @@ def genera_grafico_multi(dim_pacchetti, tempi_list, labels=None):
     ax.legend(loc='upper left')
 
     # -------------------------
-    # Inset: zoom parte iniziale fino a 8 MiB
+    # Inset: zoom on the initial range up to 8 MiB
     # -------------------------
     axins = inset_axes(
         ax,
@@ -50,7 +50,7 @@ def genera_grafico_multi(dim_pacchetti, tempi_list, labels=None):
         borderpad=0
     )
 
-    epsilon_zoom = 100   # finto zero per lo zoom
+    epsilon_zoom = 100   # fake zero value used for zoom visualization
 
     for tempi, _label in zip(tempi_list, labels):
         tempi_safe = [t if t > 0 else epsilon_zoom for t in tempi]
@@ -59,11 +59,11 @@ def genera_grafico_multi(dim_pacchetti, tempi_list, labels=None):
     axins.set_xscale("log", base=2)
     axins.set_yscale("log", base=10)
 
-    # Zoom fino a 8 MiB
+    # Zoom up to 8 MiB
     x_zoom = dim_pacchetti[:8]
     axins.set_xlim(x_zoom[0] * 0.8, x_zoom[-1] * 1.2)
 
-    # Range y dello zoom
+    # Y-axis range for the zoomed inset
     axins.set_ylim(80, 1500)
 
     axins.set_xticks(x_zoom)
@@ -73,7 +73,7 @@ def genera_grafico_multi(dim_pacchetti, tempi_list, labels=None):
         fontsize=8
     )
 
-    # Il tick 100 viene mostrato come "0"
+    # Display tick value 100 as "0"
     axins.set_yticks([100, 500, 1000])
     axins.set_yticklabels(["0", "500", "1000"], fontsize=8)
 
@@ -82,11 +82,11 @@ def genera_grafico_multi(dim_pacchetti, tempi_list, labels=None):
     mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ec="0.5")
 
     plt.savefig("grafico_multi_misto.png", dpi=300, bbox_inches="tight")
-    print("Grafico salvato in grafico_multi_misto.png")
+    print("Graph saved as grafico_multi_misto.png")
 
 
 def human_readable_size(size_bytes):
-    """Converte un valore in byte in formato human-readable (KiB, MiB, GiB)."""
+    """Convert a byte value into a human-readable format (KiB, MiB, GiB)."""
     if size_bytes == 0:
         return "0 B"
 
@@ -104,7 +104,7 @@ def human_readable_size(size_bytes):
 
 
 # ------------------------
-# Esempio di utilizzo
+# Example usage
 # ------------------------
 if __name__ == "__main__":
     dim_pacchetti = [4, 32, 256, 2*1024, 16*1024, 128*1024, 1*1024*1024, 8*1024*1024, 64*1024*1024, 512*1024*1024]

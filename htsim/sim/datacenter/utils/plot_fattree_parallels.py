@@ -70,11 +70,11 @@ def plot_flows_by_id(flows,
     # Optimization for 56 flowIds
     flow_ids = sorted(flows.keys())
 
-    # Ottimizzazione per 56 flowId
+    # Optimization for 56 flowIds
     y_spacing = 0.25      # vertical distance for flowId
     flow_to_y = {fid: i * y_spacing for i, fid in enumerate(flow_ids)}
 
-    # I determine the connections and assign a color to each
+    # Determine the connections and assign a color to each one
     links = []
     for fid in flow_ids:
         src, dst, t_start, t_end = flows[fid]
@@ -90,7 +90,7 @@ def plot_flows_by_id(flows,
     # Taller graph to make it readable
     plt.figure(figsize=(14, 10 * 3))
 
-    # I draw each flow as a colored horizontal segment
+    # Draw each flow as a colored horizontal segment
     for fid in flow_ids:
         src, dst, t_start, t_end = flows[fid]
         y = flow_to_y[fid]
@@ -100,7 +100,7 @@ def plot_flows_by_id(flows,
         # flow duration bar
         plt.hlines(y, t_start, t_end, linewidth=7, color=color)
 
-    # Y-axis labels: I put flowId (and optionally the link)
+    #  Y-axis labels: flowId and corresponding link
     y_values = [flow_to_y[fid] for fid in flow_ids]
     y_labels = [f"{fid} ({flows[fid][0]}->{flows[fid][1]})" for fid in flow_ids]
 
@@ -132,7 +132,7 @@ def plot_flows_by_id(flows,
 
 def main():
     if len(sys.argv) < 2:
-        print("Uso: python plot_fattree_flows_by_id.py <file_log_simulation>")
+        print("Usage: python plot_fattree_flows_by_id.py <simulation_log_file>")
         sys.exit(1)
 
     filepath = sys.argv[1]

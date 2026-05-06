@@ -56,7 +56,7 @@ def parse_log_intervals(filepath):
 def plot_link_intervals(link_intervals,
                         title="Utilization of connections host↔host Fat Tree Without Scale Up (start–finish intervals)"):
     if not link_intervals:
-        print("No intervallo start/finish found in the log.")
+        print("No start/finish interval found in the log.")
         return
 
     # Sorted Links (Y-Axis)

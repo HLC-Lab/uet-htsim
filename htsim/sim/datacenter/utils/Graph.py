@@ -3,26 +3,26 @@ import math
 
 def genera_grafico_multi(dim_pacchetti, tempi_list, labels=None):
     """
-    Genera un grafico con più curve sullo stesso asse cartesiano.
-    
+    Generate a graph with multiple curves on the same Cartesian plane.
+
     Parameters:
-        dim_pacchetti (list): dimensione dei pacchetti
-        tempi_list (list of lists): elenco di liste di tempi
-        labels (list): etichette da mostrare nella legenda
+        dim_pacchetti (list): packet sizes
+        tempi_list (list of lists): list of execution time series
+        labels (list): labels shown in the legend
     """
 
-    # Controllo che ogni vettore di tempi abbia la stessa lunghezza
+    # Check that each time vector has the same length
     for tempi in tempi_list:
         if len(tempi) != len(dim_pacchetti):
-            raise ValueError("Ogni lista di tempi deve avere la stessa lunghezza della lista delle dimensioni.")
+            raise ValueError("Each time list must have the same length as the packet size list.")
 
     plt.figure(figsize=(10, 6))
 
-    # Etichette di default
+    # Default labels
     if labels is None:
         labels = [f"Serie {i+1}" for i in range(len(tempi_list))]
 
-    # Matplotlib assegna automaticamente colori diversi
+    # Matplotlib automatically assigns different colors
     for tempi, label in zip(tempi_list, labels):
         plt.plot(dim_pacchetti, tempi, marker='o', label=label)
 
@@ -36,18 +36,18 @@ def genera_grafico_multi(dim_pacchetti, tempi_list, labels=None):
     labels_readable = [human_readable_size(x) for x in dim_pacchetti]
     plt.xticks(dim_pacchetti, labels_readable, rotation=45)  
 
-    # Legenda
+    # Legend
     plt.legend(loc='upper left')
 
     plt.subplots_adjust(bottom=0.22)
 
-    # Salva il grafico
+    # Save the graph
     plt.savefig("grafico_multi.png")
-    print("Grafico salvato in grafico_multi.png")
+    print("Graph saved as grafico_multi.png")
 
 
 def human_readable_size(size_bytes):
-    """Converte un valore in byte in formato human-readable (KiB, MiB, GiB)."""
+    """Convert a byte value into a human-readable format (KiB, MiB, GiB)."""
     if size_bytes == 0:
         return "0 B"
 
@@ -65,7 +65,7 @@ def human_readable_size(size_bytes):
 
 
 # ------------------------
-# Esempio di utilizzo
+# Example usage
 # ------------------------
 if __name__ == "__main__":
     dim_pacchetti = [4 , 32 , 256 , 2*1024 , 16*1024 , 128*1024 , 1*1024*1024 , 8*1024*1024 , 64*1024*1024 , 512*1024*1024]

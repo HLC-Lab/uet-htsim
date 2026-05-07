@@ -664,7 +664,7 @@ bool IncConnectionMatrix::load(const char * filename){
     }
 }
 
-void tokenize(string const &str, const char delim, vector<string> &out)
+void inc_tokenize(string const &str, const char delim, vector<string> &out)
 {
     stringstream ss(str);
     string s;
@@ -707,7 +707,7 @@ bool IncConnectionMatrix::load(istream& file){
     while (std::getline(file, line)) {
                 linecount++;
                 vector<string> tokens;
-                tokenize(line, ' ', tokens);
+                inc_tokenize(line, ' ', tokens);
                 
                 if (tokens.size() == 0 || tokens[0][0] == '#') {
                         continue;
@@ -731,7 +731,7 @@ bool IncConnectionMatrix::load(istream& file){
     do {
         linecount++;
         vector<string> tokens;
-        tokenize(line, ' ', tokens);
+        inc_tokenize(line, ' ', tokens);
         if (tokens.size() < 1) {
             continue;
         }

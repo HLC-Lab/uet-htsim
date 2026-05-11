@@ -5,7 +5,7 @@ This repository is a fork of the official UEC repository, with the following fea
 - Scale-up Network topologies (developer: [Francesco Saletti](https://github.com/FrancescoSaletti03))
 - In-Network Collectives (developer: [Christian Fraschetti](https://github.com/FrascaHoryzont) and [Chiara Di Stefano](https://github.com/chiaradistefano))
 - Packet logging and per-port statistics (developer: [Chiara Di Stefano](https://github.com/chiaradistefano) and [Simone Lidonnici](https://github.com/SimoneLid))
-- Fixes on the validation tests suite (developer: [Matthew Fernandez](https://github.com/matt-dbs))
+- Fixes on the validation tests suite and other bug fixes (developer: [Matthew Fernandez](https://github.com/matt-dbs))
 
 The following features will be added in the next weeks:
 - Dynamic traffic visualization tools

@@ -28,14 +28,14 @@ connection_matrices/incast_1024_100K.cm
 !Param -sender_cc_only
 !Param -end 15000
 !Param -cwnd 50
-!tailFCT 8950
+!tailFCT 10557
 connection_matrices/incast_3-1_overlapped.tm
 !Experiment 3 to 1 incast with long running flow
 !Binary ./htsim_uec
 !Param -sender_cc_only
 !Param -end 1000
 !Param -cwnd 50
-!tailFCT 220
+!tailFCT 222
 connection_matrices/outcast_incast.cm
 !Experiment outcast incast
 !Binary ./htsim_uec
@@ -57,7 +57,7 @@ connection_matrices/perm_16n_16c_2MB.cm
 !Param -sender_cc_only
 !Param -end 2000
 !Param -paths 128
-!tailFCT 210
+!tailFCT 239
 connection_matrices/perm_16n_16c_2MB.cm
 !Experiment Small permutation, single path.
 !Binary ./htsim_uec

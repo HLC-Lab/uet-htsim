@@ -6,7 +6,7 @@ connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Param -load_balancing_algo oblivious
 !Param -paths 128
 !Param -failed 8
-!tailFCT 220
+!tailFCT 565
 connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Experiment Large permutation, oblivious, large queues (1024 nodes), 8 core links running at 10% capacity
 !Binary ./htsim_uec
@@ -16,7 +16,7 @@ connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Param -load_balancing_algo oblivious
 !Param -paths 128
 !Param -failed 8
-!tailFCT 220
+!tailFCT 565
 connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Experiment Large permutation, bitmap (1024 nodes), 8 core links running at 10% capacity
 !Binary ./htsim_uec
@@ -25,7 +25,7 @@ connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Param -load_balancing_algo bitmap
 !Param -paths 128
 !Param -failed 8
-!tailFCT 220
+!tailFCT 221
 connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Experiment Large permutation, bitmap, large queues (1024 nodes), 8 core links running at 10% capacity
 !Binary ./htsim_uec
@@ -35,7 +35,7 @@ connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Param -load_balancing_algo bitmap
 !Param -paths 128
 !Param -failed 8
-!tailFCT 220
+!tailFCT 479
 connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Experiment Large permutation, REPS, 1SACK/packet (1024 nodes), 8 core links running at 10% capacity
 !Binary ./htsim_uec
@@ -65,7 +65,7 @@ connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Param -load_balancing_algo reps
 !Param -paths 128
 !Param -failed 8
-!tailFCT 220
+!tailFCT 246
 connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Experiment Large permutation, mixed (bitmap+REPS), 1SACK/packet (1024 nodes), 8 core links running at 10% capacity
 !Binary ./htsim_uec

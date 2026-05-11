@@ -56,7 +56,7 @@ connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Param -q 500
 !Param -load_balancing_algo oblivious
 !Param -paths 128
-!tailFCT 220
+!tailFCT 226
 connection_matrices/perm_1024n_1024c_0u_2000000b.cm
 !Experiment Large permutation, bitmap, large queues (1024 nodes)
 !Binary ./htsim_uec

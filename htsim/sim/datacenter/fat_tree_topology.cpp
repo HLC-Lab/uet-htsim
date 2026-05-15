@@ -454,7 +454,7 @@ void FatTreeTopologyCfg::set_params(uint32_t no_of_nodes) {
     int K = 0;
     if (_tiers == 3) {
         while (_no_of_nodes < no_of_nodes) {
-            K++;
+            K += 2;
             _no_of_nodes = K * K * K /4;
         }
         if (K == 0) {
@@ -476,7 +476,7 @@ void FatTreeTopologyCfg::set_params(uint32_t no_of_nodes) {
     } else if (_tiers == 2) {
         // We want a leaf-spine topology
         while (_no_of_nodes < no_of_nodes) {
-            K++;
+            K += 2;
             _no_of_nodes = K * K /2;
         }
         if (_no_of_nodes > no_of_nodes) {

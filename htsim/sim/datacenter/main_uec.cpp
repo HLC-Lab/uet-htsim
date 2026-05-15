@@ -232,7 +232,9 @@ int main(int argc, char **argv) {
                 load_balancing_algo = MIXED;
             }
             else {
-                cout << "Unknown load balancing algorithm of type " << argv[i+1] << ", expecting bitmap, reps or reps2" << endl;
+                cout << "Unknown load balancing algorithm of type " << argv[i+1]
+                     << ", expecting bitmap, reps, reps_legacy, oblivious, or "
+                     << "mixed" << endl;
                 exit_error(argv[0]);
             }
             cout << "Load balancing algorithm set to  "<< argv[i+1] << endl;
@@ -564,7 +566,9 @@ int main(int argc, char **argv) {
         }
         break;
     case NOT_SET:
-        fprintf(stderr, "Route Strategy not set.  Use the -strat param.  \nValid values are perm, rand, pull, rg and single\n");
+        fprintf(stderr, "Route Strategy not set.  Use the -strat param.  \n"
+                        "Valid values are ecmp_host, rr_ecmp, ecmp_host_ecn, "
+                        "reactive_ecn, ecmp_ar, ecmp_host_ar, and ecmp_rr\n");
         exit(1);
     default:
         break;

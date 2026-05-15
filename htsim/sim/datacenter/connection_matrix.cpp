@@ -751,7 +751,7 @@ bool ConnectionMatrix::load(istream& file){
             for (size_t i = 1; i < tokens.size(); i++) {
                 if (tokens[i] == "start") {
                     i++;
-                    double start = stof(tokens[i]);
+                    const simtime_picosec start = std::stoul(tokens[i]);
                     c->start = start; // start is in picoseconds already
                 } else if (tokens[i] == "size") {
                     i++;

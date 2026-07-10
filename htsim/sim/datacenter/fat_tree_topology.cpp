@@ -514,7 +514,7 @@ void FatTreeTopologyCfg::set_params(uint32_t no_of_nodes) {
     _hosts_per_pod = _no_of_nodes / NPOD;
 }
 
-simtime_picosec FatTreeTopologyCfg::get_two_point_diameter_latency(int src, int dst) {
+simtime_picosec FatTreeTopologyCfg::get_two_point_diameter_latency(int src, int dst) const{
     simtime_picosec diameter_latency_end_point = 0;
     simtime_picosec one_hop_delay = 0;
     if(_link_latencies[TOR_TIER] == 0){

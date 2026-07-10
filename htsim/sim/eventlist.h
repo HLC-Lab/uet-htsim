@@ -42,6 +42,7 @@ public:
     static inline simtime_picosec now() {return EventList::_lasteventtime;}
     static inline int trafficEventCount() {return EventList::_trafficeventcount;}
     static Handle nullHandle() {return _pendingsources.end();}
+    static multimap<simtime_picosec, EventSource*> getPendingSources() {return _pendingsources;}
 
 
     static EventList& getTheEventList();

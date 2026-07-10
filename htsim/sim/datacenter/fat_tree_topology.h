@@ -159,10 +159,10 @@ public:
     uint32_t queue_down(int tier) const {return _queue_down[tier];}
 
     int get_oversubscription_ratio(){int ratio = _oversub[TOR_TIER]; if (_tiers>2) ratio *= _oversub[AGG_TIER]; return ratio;}
-    simtime_picosec get_diameter_latency() {return _diameter_latency;}
-    simtime_picosec get_two_point_diameter_latency(int src, int dst);
+    simtime_picosec get_diameter_latency() const {return _diameter_latency;}
+    simtime_picosec get_two_point_diameter_latency(int src, int dst) const;
 
-    uint16_t get_diameter() {return _diameter;}
+    uint16_t get_diameter() const {return _diameter;}
 private:
     void initialize(uint32_t tiers, uint32_t no_of_nodes, linkspeed_bps linkspeed, mem_b queuesize,
                     simtime_picosec latency, simtime_picosec switch_latency, 

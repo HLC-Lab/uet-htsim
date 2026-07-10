@@ -6,6 +6,7 @@ This repository is a fork of the official UEC repository, with the following fea
 - In-Network Collectives (developer: [Christian Fraschetti](https://github.com/FrascaHoryzont) and [Chiara Di Stefano](https://github.com/chiaradistefano))
 - Packet logging and per-port statistics (developer: [Chiara Di Stefano](https://github.com/chiaradistefano) and [Simone Lidonnici](https://github.com/SimoneLid))
 - Fixes on the validation tests suite and other bug fixes (developer: [Matthew Fernandez](https://github.com/matt-dbs))
+- ATLAHS integration and ability to run GOAL files (ported from [https://github.com/spcl/HTSIM](https://github.com/spcl/HTSIM)) (developer: [Tommaso Bonato](https://github.com/tommasobo), ported by [Beyzanur Güzel](https://github.com/beyzanurguzel))
 
 The following features will be added in the next weeks:
 - Dynamic traffic visualization tools

@@ -24,7 +24,7 @@
 #include "pciemodel.h"
 #include "oversubscribed_cc.h"
 
-
+#include "logsim-interface.h"
 #include "fat_tree_topology.h"
 #include "fat_tree_switch.h"
 
@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
     simtime_picosec switch_latency = timeFromUs((uint32_t)0);
     queue_type qt = COMPOSITE;
 
-    enum LoadBalancing_Algo { BITMAP, REPS, REPS_LEGACY, OBLIVIOUS, MIXED};
+    enum LoadBalancing_Algo { BITMAP, REPS, REPS_LEGACY, FREEZING, OBLIVIOUS, MIXED, ECMP};
     LoadBalancing_Algo load_balancing_algo = MIXED;
 
     bool log_sink = false;
@@ -118,6 +118,7 @@ int main(int argc, char **argv) {
     double pcie_rate = 1.1;
 
     filename << "logout.dat";
+    string goal_filename = "";
     int end_time = 1000;//in microseconds
     bool force_disable_oversubscribed_cc = false;
     bool enable_accurate_base_rtt = false;
@@ -153,6 +154,9 @@ int main(int argc, char **argv) {
             tiers = atoi(argv[i+1]);
             cout << "tiers " << tiers << endl;
             assert(tiers == 2 || tiers == 3);
+            i++;
+        } else if (!strcmp(argv[i], "-goal")) {
+            goal_filename = argv[i + 1];
             i++;
         } else if (!strcmp(argv[i],"-planes")) {
             planes = atoi(argv[i+1]);
@@ -226,16 +230,22 @@ int main(int argc, char **argv) {
             else if (!strcmp(argv[i+1], "reps_legacy")) {
                 load_balancing_algo = REPS_LEGACY;
             }
+            else if (!strcmp(argv[i+1], "freezing")) {
+                load_balancing_algo = FREEZING;
+            }
             else if (!strcmp(argv[i+1], "oblivious")) {
                 load_balancing_algo = OBLIVIOUS;
             }
             else if (!strcmp(argv[i+1], "mixed")) {
                 load_balancing_algo = MIXED;
             }
+             else if (!strcmp(argv[i+1], "ecmp")) {
+                load_balancing_algo = ECMP;
+            }
             else {
                 cout << "Unknown load balancing algorithm of type " << argv[i+1]
-                     << ", expecting bitmap, reps, reps_legacy, oblivious, or "
-                     << "mixed" << endl;
+                     << ", expecting bitmap, reps, reps_legacy, freezing, oblivious, mixed, or "
+                     << "ecmp" << endl;
                 exit_error(argv[0]);
             }
             cout << "Load balancing algorithm set to  "<< argv[i+1] << endl;
@@ -638,7 +648,7 @@ int main(int argc, char **argv) {
             exit(-1);
         }
     }
-    else {
+    else if (goal_filename.size() == 0) {
         cout << "Loading connection matrix from  standard input" << endl;        
         conns->load(cin);
     }
@@ -792,6 +802,82 @@ int main(int argc, char **argv) {
         assert(false);
     }
 
+    // ATLAHS
+    LogSimInterface *lgs = NULL;
+
+    if (goal_filename.size() > 0) {
+        AtlahsHtsimApi *api = new AtlahsHtsimApi();
+        api->setTopology(topo[0].get());
+        api->cwnd_b = cwnd;
+        api->setEventList(&eventlist);
+        api->setComputeEvent(new ComputeEvent(eventlist));
+        api->setNullEvent(new NullEvent(eventlist));
+        lgs = new LogSimInterface(NULL, traffic_logger, eventlist, topo[0].get(), nullptr);
+        lgs->htsim_api = api;
+        api->setLogSimInterface(lgs);
+        lgs->set_protocol(UEC_PROTOCOL);
+        lgs->htsim_api->linkspeed = linkspeed;
+        api->print_stats_flows = LogSimInterface::print_stats_flows;
+
+        // Build a factory for creating per-flow multipath instances
+        switch (load_balancing_algo) {
+            case BITMAP:
+                api->setMultipathFactory([path_entropy_size]() {
+                    return std::make_unique<UecMpBitmap>(path_entropy_size, UecSrc::_debug);
+                });
+                break;
+            case REPS:
+            case REPS_LEGACY:
+                api->setMultipathFactory([path_entropy_size]() {
+                    return std::make_unique<UecMpRepsLegacy>(path_entropy_size, UecSrc::_debug);
+                });
+                break;
+            case FREEZING:
+                api->setMultipathFactory([path_entropy_size, disable_trim]() {
+                    return std::make_unique<UecMpReps>(path_entropy_size, UecSrc::_debug, !disable_trim);
+                });
+                break;
+            case OBLIVIOUS:
+                api->setMultipathFactory([path_entropy_size]() {
+                    return std::make_unique<UecMpOblivious>(path_entropy_size, UecSrc::_debug);
+                });
+                break;
+            case ECMP:
+                api->setMultipathFactory([path_entropy_size]() {
+                    return std::make_unique<UecMpEcmp>(path_entropy_size, UecSrc::_debug);
+                });
+                break;
+            case MIXED:
+                api->setMultipathFactory([path_entropy_size, disable_trim]() {
+                    return std::make_unique<UecMpMixed>(path_entropy_size, UecSrc::_debug);
+                });
+                break;
+            default:
+                cout << "ERROR: Failed to set multipath algorithm, abort." << endl;
+                abort();
+        }
+
+        // Calculate G in cycles
+        double linkSpeedBytesPerSec = (linkspeed/1000000000 * 1e9) / 8.0;
+        lgs->htsim_api->htsim_G  = 1e9 / linkSpeedBytesPerSec;
+
+        printf("<HTSIM> G %f\n", lgs->htsim_api->htsim_G);
+
+        lgs->htsim_api->total_nodes = no_of_nodes;
+        lgs->htsim_api->Setup();
+        printf("Started LGS\n");
+        
+        start_lgs(goal_filename, *lgs);
+        printf("Iteration Terminated\n");
+    }
+    
+
+    if (goal_filename.size() > 0) {
+        printf("Finished all\n");
+        fflush(stdout);
+        return 0;
+    }
+
     mem_b cwnd_b = cwnd*Packet::data_packet_size();
     for (size_t c = 0; c < all_conns->size(); c++){
         connection* crt = all_conns->at(c);
@@ -817,12 +903,16 @@ int main(int argc, char **argv) {
                 mp = make_unique<UecMpBitmap>(path_entropy_size, UecSrc::_debug);
             } else if (load_balancing_algo == REPS){
                 mp = make_unique<UecMpReps>(path_entropy_size, UecSrc::_debug, !disable_trim);
+            } else if (load_balancing_algo == FREEZING){
+                mp = make_unique<UecMpReps>(path_entropy_size, UecSrc::_debug, !disable_trim);
             } else if (load_balancing_algo == REPS_LEGACY){
                 mp = make_unique<UecMpRepsLegacy>(path_entropy_size, UecSrc::_debug);
             }else if (load_balancing_algo == OBLIVIOUS){
                 mp = make_unique<UecMpOblivious>(path_entropy_size, UecSrc::_debug);
             } else if (load_balancing_algo == MIXED){
                 mp = make_unique<UecMpMixed>(path_entropy_size, UecSrc::_debug);
+            } else if (load_balancing_algo == ECMP){
+                mp = make_unique<UecMpEcmp>(path_entropy_size, UecSrc::_debug);
             } else {
                 cout << "ERROR: Failed to set multipath algorithm, abort." << endl;
                 abort();

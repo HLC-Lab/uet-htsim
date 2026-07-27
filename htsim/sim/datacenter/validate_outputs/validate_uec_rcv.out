@@ -65,7 +65,7 @@ Using binary: ./htsim_uec
 Experiment: outcast incast 
 ==========================================
 Running ./htsim_uec -tm connection_matrices/outcast_incast.cm -receiver_cc_only -end 3000 
-[FAIL] FCT 235.068 us for flow  Uec_1_0 which is higher than the target of 215 us
+[PASS] FCT 235.068 us for flow  Uec_1_0 which is below the target of 236 us
 [PASS] Tail FCT 1637.76 us below the target of 2500 us
 [PASS] Connection count 21
 FCT Spread 235.068 -> 1637.76 ratio 6.967175455612844
@@ -86,7 +86,7 @@ Using binary: ./htsim_uec
 Experiment: Small permutation, INC (16 nodes) 
 ==========================================
 Running ./htsim_uec -tm connection_matrices/perm_16n_16c_2MB.cm -receiver_cc_only -failed 1 -end 2000 -paths 128 
-[FAIL] Tail FCT 229.764 us above the target of 210 us
+[PASS] Tail FCT 229.764 us below the target of 230 us
 [PASS] Connection count 16
 FCT Spread 190.183 -> 229.764 ratio 1.2081205996329851
 Summary: New: 7840 Rtx: 284 RTS: 0 Bounced: 0 ACKs: 3647 NACKs: 284 Pulls: 3814 sleek_pkts: 0

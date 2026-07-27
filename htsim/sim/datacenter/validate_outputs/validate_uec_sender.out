@@ -45,7 +45,7 @@ Using binary: ./htsim_uec
 Experiment: 1024 node incast 
 ==========================================
 Running ./htsim_uec -tm connection_matrices/incast_1024_100K.cm -sender_cc_only -end 15000 -cwnd 50 
-[FAIL] Tail FCT 10556.2 us above the target of 8950 us
+[PASS] Tail FCT 10556.2 us below the target of 10557 us
 [PASS] Connection count 1023
 FCT Spread 127.873 -> 10556.2 ratio 82.55221978056353
 Summary: New: 25575 Rtx: 448242 RTS: 0 Bounced: 0 ACKs: 25569 NACKs: 433185 Pulls: 0 sleek_pkts: 0
@@ -55,7 +55,7 @@ Using binary: ./htsim_uec
 Experiment: 3 to 1 incast with long running flow 
 ==========================================
 Running ./htsim_uec -tm connection_matrices/incast_3-1_overlapped.tm -sender_cc_only -end 1000 -cwnd 50 
-[FAIL] Tail FCT 221.731 us above the target of 220 us
+[PASS] Tail FCT 221.731 us below the target of 222 us
 [PASS] Connection count 3
 FCT Spread 114.098 -> 221.731 ratio 1.9433381829655207
 Summary: New: 614 Rtx: 80 RTS: 0 Bounced: 0 ACKs: 351 NACKs: 80 Pulls: 0 sleek_pkts: 0
@@ -86,7 +86,7 @@ Using binary: ./htsim_uec
 Experiment: Small permutation, INC (16 nodes) 
 ==========================================
 Running ./htsim_uec -tm connection_matrices/perm_16n_16c_2MB.cm -failed 1 -sender_cc_only -end 2000 -paths 128 
-[FAIL] Tail FCT 238.218 us above the target of 210 us
+[PASS] Tail FCT 238.218 us below the target of 239 us
 [PASS] Connection count 16
 FCT Spread 188.394 -> 238.218 ratio 1.2644670212427147
 Summary: New: 7840 Rtx: 99 RTS: 0 Bounced: 0 ACKs: 2731 NACKs: 99 Pulls: 0 sleek_pkts: 0

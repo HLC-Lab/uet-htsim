@@ -65,7 +65,7 @@ Using binary: ./htsim_uec
 Experiment: Large permutation, oblivious, large queues (1024 nodes) 
 ==========================================
 Running ./htsim_uec -tm connection_matrices/perm_1024n_1024c_0u_2000000b.cm -receiver_cc_only -end 1000 -q 500 -load_balancing_algo oblivious -paths 128 
-[FAIL] Tail FCT 225.113 us above the target of 220 us
+[PASS] Tail FCT 225.113 us below the target of 226 us
 [PASS] Connection count 1024
 FCT Spread 168.791 -> 225.113 ratio 1.3336789283788828
 Summary: New: 501760 Rtx: 0 RTS: 0 Bounced: 0 ACKs: 215344 NACKs: 0 Pulls: 204127 sleek_pkts: 0

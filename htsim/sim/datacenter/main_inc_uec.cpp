@@ -917,7 +917,7 @@ int main(int argc, char **argv) {
                 dsttotor->push_back(topo[p]->pipes_ns_nlp[logical_dest][topo_cfg->HOST_POD_SWITCH(logical_dest)][0]);
                 dsttotor->push_back(topo[p]->queues_ns_nlp[logical_dest][topo_cfg->HOST_POD_SWITCH(logical_dest)][0]->getRemoteEndpoint());
                 
-                uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk, crt->start);
+                uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk, timeFromUs((uint32_t)crt->start));
 
                 topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]->addHostPort(src,uec_snk->flowId(),uec_src->getPort(p));
                 if (u_dest != UINT32_MAX) {

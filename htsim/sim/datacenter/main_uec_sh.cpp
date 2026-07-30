@@ -953,7 +953,7 @@ int main(int argc, char **argv) {
                             swhtodest->push_back(topo[p]->queues_nh_nhs[dest][topo[p]->HOSTSWITCH_ID(dest)][0]->getRemoteEndpoint());
 
 
-                            uec_src->connectPort(p, *srctoswh, *swhtodest, *uec_snk, crt->start);
+                            uec_src->connectPort(p, *srctoswh, *swhtodest, *uec_snk, timeFromUs((uint32_t)crt->start));
                             
                             //register src and snk to receive packets from their respective TORs. 
                             assert(topo[p]->switches_host[topo[p]->HOSTSWITCH_ID(src)]);
@@ -977,7 +977,7 @@ int main(int argc, char **argv) {
                         dsttotor->push_back(topo[p]->pipes_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
                         dsttotor->push_back(topo[p]->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]->getRemoteEndpoint());
 
-                        uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk, crt->start);
+                        uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk, timeFromUs((uint32_t)crt->start));
                         //uec_src->setPaths(path_entropy_size);
                         //uec_snk->setPaths(path_entropy_size);
 

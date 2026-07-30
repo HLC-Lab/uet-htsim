@@ -1011,7 +1011,7 @@ int main(int argc, char **argv) {
                         swhtodest->push_back(topo[p]->pipes_nh_nhs[dest][hs][lvl][0]);
                         swhtodest->push_back(topo[p]->queues_nh_nhs[dest][hs][lvl][0]->getRemoteEndpoint());
 
-                        uec_src->connectPort(port_id, *srctoswh, *swhtodest, *uec_snk, crt->start);
+                        uec_src->connectPort(port_id, *srctoswh, *swhtodest, *uec_snk, timeFromUs((uint32_t)crt->start));
 
                         // Register src and dst with the corresponding host-switch at this level.
                         assert(topo[p]->switches_host[hs][lvl]);
@@ -1041,7 +1041,7 @@ int main(int argc, char **argv) {
 
                         const uint32_t port_id = 0;
 
-                        uec_src->connectPort(port_id, *srctotor, *dsttotor, *uec_snk, crt->start);
+                        uec_src->connectPort(port_id, *srctotor, *dsttotor, *uec_snk, timeFromUs((uint32_t)crt->start));
 
                         assert(topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
                         assert(topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(dest)]);

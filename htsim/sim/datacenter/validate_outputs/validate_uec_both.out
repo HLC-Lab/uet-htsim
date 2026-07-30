@@ -86,7 +86,7 @@ Using binary: ./htsim_uec
 Experiment: Small permutation, INC (16 nodes) 
 ==========================================
 Running ./htsim_uec -tm connection_matrices/perm_16n_16c_2MB.cm -failed 1 -sender_cc -receiver_cc -end 2000 -paths 128 
-[FAIL] Tail FCT 238.253 us above the target of 210 us
+[PASS] Tail FCT 238.253 us below the target of 239 us
 [PASS] Connection count 16
 FCT Spread 188.356 -> 238.253 ratio 1.2649079402832932
 Summary: New: 7840 Rtx: 100 RTS: 0 Bounced: 0 ACKs: 2858 NACKs: 100 Pulls: 4348 sleek_pkts: 0

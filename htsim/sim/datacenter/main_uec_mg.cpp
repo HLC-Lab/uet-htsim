@@ -953,7 +953,7 @@ int main(int argc, char **argv) {
                     dst2src->push_back(uec_src->getPort(p)); // Endpoint del src
 
                     // Collego la porta usando direttamente i path host<->host
-                    uec_src->connectPort(p, *src2dst, *dst2src, *uec_snk, crt->start);
+                    uec_src->connectPort(p, *src2dst, *dst2src, *uec_snk, timeFromUs((uint32_t)crt->start));
 
                     break;
                 }
@@ -972,7 +972,7 @@ int main(int argc, char **argv) {
                         dsttotor->push_back(topo[p]->pipes_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
                         dsttotor->push_back(topo[p]->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]->getRemoteEndpoint());
 
-                        uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk, crt->start);
+                        uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk, timeFromUs((uint32_t)crt->start));
                         //uec_src->setPaths(path_entropy_size);
                         //uec_snk->setPaths(path_entropy_size);
 

@@ -84,7 +84,7 @@ class Packet {
     
     /* empty constructor; Packet::set must always be called as
        well. It's a separate method, for convenient reuse */
-    Packet() {_is_header = false; _bounced = false; _type = IP; _flags = 0; _refcount = 0; _dst = UINT32_MAX; _hop_count = 0; _pathid = UINT32_MAX; _direction = NONE; _ingressqueue = NULL; _channel = 0; _is_inc = false; _inc_job_id = 0; _inc_block_id = 0; _inc_int_data = 0; _is_straggler = false; _inc_last_switch_id = -1;}
+    Packet() {_src = UINT32_MAX, _is_header = false; _bounced = false; _type = IP; _flags = 0; _refcount = 0; _dst = UINT32_MAX; _hop_count = 0; _pathid = UINT32_MAX; _direction = NONE; _ingressqueue = NULL; _channel = 0; _is_inc = false; _inc_job_id = 0; _inc_block_id = 0; _inc_int_data = 0; _is_straggler = false; _inc_last_switch_id = -1;}
 
     /* say "this packet is no longer wanted". (doesn't necessarily
        destroy it, so it can be reused) */
@@ -311,6 +311,8 @@ class PacketDB {
             P* p = _freelist.back();
             _freelist.pop_back();
             p->inc_ref_count();
+            p->set_hop_count(0); 
+            p->set_src(UINT32_MAX);  
             return p;
         }
     };

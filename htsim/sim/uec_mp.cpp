@@ -2,6 +2,12 @@
 #include "uec_mp.h"
 
 #include <iostream>
+//reps SWITCH-HOST partition for dragonfly+ parameters 
+double UecMpReps::_escalate_hi = 0.5;                      
+double UecMpReps::_escalate_lo = 0.25;   
+double UecMpReps::_warmup_explore_rtt_mult = 0;
+uint16_t UecMpReps::_explore_prob_pct = 0;
+uint16_t UecMpReps::_partition_threshold = 0;
 
 
 UecMpOblivious::UecMpOblivious(uint16_t no_of_paths,
@@ -134,25 +140,60 @@ uint16_t UecMpBitmap::nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) 
     return entropy;
 }
 
-UecMpReps::UecMpReps(uint16_t no_of_paths, bool debug, bool is_trimming_enabled)
+UecMpReps::UecMpReps(uint16_t no_of_paths, bool debug, bool is_trimming_enabled, bool partition_entropy,
+                      simtime_picosec base_rtt)
     : UecMultipath(debug),
       _no_of_paths(no_of_paths),
       _crt_path(0),
-      _is_trimming_enabled(is_trimming_enabled) {
+      _is_trimming_enabled(is_trimming_enabled),
+      _partition_entropy(partition_entropy),
+      _base_rtt(base_rtt) {
+
+        if (partition_entropy && _no_of_paths < 2) {
+        cout << "WARNING: partition entropy requires no_of_paths >= 2, disabling" << endl;
+        _partition_entropy = false;
+    }
+
+
 
     circular_buffer_reps = new CircularBufferREPS<uint16_t>(CircularBufferREPS<uint16_t>::repsBufferSize);
+
+    if (_partition_entropy && _warmup_explore_rtt_mult > 0 && _base_rtt > 0) {
+        _warmup_deadline = EventList::getTheEventList().now() + (simtime_picosec)(_base_rtt * _warmup_explore_rtt_mult);
+    }
 
     if (_debug)
         cout << "Multipath"
             << " REPS"
             << " _no_of_paths " << _no_of_paths
+            << " _crt_path " << _crt_path
+            << " _is_trimming_enabled " << _is_trimming_enabled
+            << " _partition_entropy " << _partition_entropy
             << endl;
+}
+
+uint16_t UecMpReps::drawEntropy(bool open_tier) {
+    if (!_partition_entropy) {
+        return rand() % _no_of_paths;
+    }
+    uint16_t t = tierThreshold();             // minimal tier = [0, t)
+    uint16_t open_sz = _no_of_paths - t;      // open tier    = [t, _no_of_paths)
+    return open_tier ? (t + rand() % open_sz) : (rand() % t);
 }
 
 void UecMpReps::processEv(uint16_t path_id, PathFeedback feedback) {
 
+        // Track congestion on the minimal tier only.                                
+    if (_partition_entropy && feedback != PATH_TIMEOUT && path_id < tierThreshold()) {
+        double congested = (feedback == PATH_ECN || feedback == PATH_NACK) ? 1.0 : 0.0;  
+        _min_tier_congestion += (congested - _min_tier_congestion) / 16.0;     //alpha = 16, new = old + alpha(congested − old)
+
+        if (!_escalated && _min_tier_congestion > _escalate_hi) _escalated = true;  
+        else if (_escalated && _min_tier_congestion < _escalate_lo) _escalated = false;  
+    }  
+
     if ((feedback == PATH_TIMEOUT) && !circular_buffer_reps->isFrozenMode() && circular_buffer_reps->explore_counter == 0) {
-        if (_is_trimming_enabled) { // If we have trimming enabled
+        if (_is_trimming_enabled) { 
             circular_buffer_reps->setFrozenMode(true);
             circular_buffer_reps->can_exit_frozen_mode = EventList::getTheEventList().now() +  circular_buffer_reps->exit_freeze_after;
         } else {
@@ -177,18 +218,23 @@ void UecMpReps::processEv(uint16_t path_id, PathFeedback feedback) {
 uint16_t UecMpReps::nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) {
     if (circular_buffer_reps->explore_counter > 0) {
         circular_buffer_reps->explore_counter--;
-        return rand() % _no_of_paths;
+        return drawEntropy(true);
+    }
+        if (_warmup_deadline > 0 && EventList::getTheEventList().now() < _warmup_deadline) {
+        return drawEntropy(true);
     }
 
     if (circular_buffer_reps->isFrozenMode()) {
         if (circular_buffer_reps->isEmpty()) {
-            return rand() % _no_of_paths;
+            return drawEntropy(true);
         } else {
             return circular_buffer_reps->remove_frozen();
         }
     } else {
         if (circular_buffer_reps->isEmpty() || circular_buffer_reps->getNumberFreshEntropies() == 0) {
-            return _crt_path = rand() % _no_of_paths;
+            //return _crt_path = drawEntropy(false);            
+            bool explore_now = _escalated || (_explore_prob_pct > 0 && (uint32_t)(rand() % 100) < _explore_prob_pct); //At prob = 70, explore_now is already true 70% of the time. Escalation's marginal effect is on the remaining 30%:
+            return _crt_path = drawEntropy(explore_now);
         } else {
             return circular_buffer_reps->remove_earliest_fresh();
         }

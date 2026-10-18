@@ -81,7 +81,8 @@ public:
 
     void count_queue(Queue*); //da vedere se implementarlo o meno 
 
-    uint32_t get_host_switch(uint32_t src) { return (src / _p); }
+    //uint32_t get_host_switch(uint32_t src) { return (src / _p); }
+    uint32_t get_host_switch(uint32_t src) const { return (src / _p); }
     uint32_t get_a() { return _a; }
     uint32_t get_h() { return _h; }
     uint32_t get_k() { return _k; }
@@ -94,6 +95,20 @@ public:
     uint32_t get_no_switches() { return _no_switches; }
     uint32_t get_no_parallel_link() { return _no_parallel_link; }
     uint32_t get_topology_type() { return _topology_type; }
+
+    // host -> leaf -> spine -[global]-> spine -> leaf -> host
+    //   = 2 host links + 2 local links + 1 global link + 4 switch delays
+    simtime_picosec get_diameter_latency() const {
+        return 2 * _link_latency_host
+             + 2 * _link_latency_local
+             +     _link_latency_global
+             + 4 * _switch_latency;
+    }
+    uint32_t get_diameter() const { return 5; } 
+    simtime_picosec get_two_point_diameter_latency(int src, int dst) const;
+    uint32_t get_two_point_diameter(int src, int dst) const;
+
+
 
     uint32_t get_group_switch(uint32_t src_group, uint32_t dst_group, Packet& pkt, uint32_t hash);
     uint32_t get_target_switch(uint32_t src_switch, uint32_t global_link);

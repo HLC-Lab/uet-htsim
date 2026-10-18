@@ -2,11 +2,19 @@
 #include "dragonfly_plus_switch.h"
 #include <random>
 #include <stdexcept>
+#include <cassert>
 #include "dragonfly_plus_topology.h"
 
 bool DragonflyPlusSwitch::_trim_disable = false;
 uint16_t DragonflyPlusSwitch::_trim_size = 0;
+uint16_t DragonflyPlusSwitch::_entropy_partition_threshold = 0;
 DragonflyPlusSwitch::RoutingStrategy DragonflyPlusSwitch::_routing_strategy = DragonflyPlusSwitch::MINIMAL;
+uint16_t DragonflyPlusSwitch::_minimal_share_pct = 10;  // Share of the entropy space pinned to the minimal global link at the source spine.
+// Note for future upgrades this is NOT the resulting minimal fraction becauseMID, which still contains the minimal link as one of its g-1 members, so the
+// real fraction is p + (1-p)/(g-1) -- 19% at the calibrated p=10 with 11 groups.
+// Ignored while the entropy partition is active.
+uint16_t DragonflyPlusSwitch::_low_share_pct = 10; // tuned
+bool DragonflyPlusSwitch::_low_share_uniform = false;   // false = off
 
 string ntoa(double n);
 string itoa(uint64_t n);
@@ -32,6 +40,8 @@ DragonflyPlusSwitch::DragonflyPlusSwitch(EventList& event_list,
     _no_groups = topo->get_no_groups();
 
     _pipe = new CallbackPipe(delay, event_list, this);
+    _hash_salt = (uint32_t)random();
+      
     
 
     //trovo gli spine a cui è collegato ogni switch
@@ -104,7 +114,11 @@ DragonflyPlusSwitch::DragonflyPlusSwitch(EventList& event_list,
 
 void DragonflyPlusSwitch::receivePacket(Packet& pkt) {
     if (_packets.find(&pkt) == _packets.end()) {
-        _packets[&pkt] = true;
+        _packets[&pkt] = true; 
+        if (pkt.type() == UECDATA) {
+            // Only count hops for forward data packets. Ack/Nack/Rts/Pull
+            pkt.increment_hop_count();
+        }
         const Route* next_hop = getNextHop(pkt, NULL);
         if (next_hop == NULL){
             cout << "è qui il problema" <<endl;
@@ -112,6 +126,11 @@ void DragonflyPlusSwitch::receivePacket(Packet& pkt) {
         pkt.set_route(*next_hop);
 
         _pipe->receivePacket(pkt);
+                //if (_type == LEAF && _id == _topo->get_host_switch(pkt.dst())) {
+            //cout << "DELIVERED flow=" << pkt.flow_id()
+              //   << " channel=" << pkt.get_channel()
+                // << " hops=" << pkt.hop_count() << endl;
+        //}
     } else {
         _packets.erase(&pkt);
         // TODO: check understanding (missing code from HTSIM - Packet signature changed)
@@ -159,6 +178,9 @@ uint32_t DragonflyPlusSwitch::get_next_switch_minimal(uint32_t this_switch, uint
             uint32_t dst_s = dst_switch % _l;
             return dst_group*_a + dst_s;
         } else {
+            if (_topo->get_topology_type() != LARGE) {                                
+                return dst_group*_a + _l + (this_switch % _s);                        
+            } 
             // lo mando allo spine giusto collegato al gruppo di destinazione
             uint32_t dst_group_switch = _topo->get_group_switch(dst_group, this_group, pkt, _hash_salt);
             return dst_group_switch;
@@ -173,6 +195,7 @@ uint32_t DragonflyPlusSwitch::get_next_switch_minimal(uint32_t this_switch, uint
             return (this_group * _a + _l + choise);
         } else {
             // lo mando allo spine giusto collegato al gruppo di destinazione
+              
             uint32_t group_switch = _topo->get_group_switch(this_group, dst_group, pkt, _hash_salt);
             return group_switch; 
         }
@@ -248,17 +271,50 @@ QueueChoice DragonflyPlusSwitch::fully_progressive_adaptive_route(vector<FibEntr
     return q_choice;
 }
 
+FibEntry* DragonflyPlusSwitch::ecmp_select_combined(vector<FibEntry*>* minimal, vector<FibEntry*>* non_minimal, Packet& pkt, bool& from_primary) {
+
+    uint32_t n_minimal = minimal ? minimal->size() : 0;
+    uint32_t n_non_minimal = non_minimal ? non_minimal->size() : 0;
+    uint32_t total = n_minimal + n_non_minimal;
+    assert(total > 0);
+
+    if (n_minimal > 0 && !_low_share_uniform) {
+        uint32_t h = freeBSDHash(pkt.flow_id(), pkt.pathid(), _hash_salt);
+        if (n_non_minimal > 0 && _low_share_pct > 0 && (h % 100) < _low_share_pct) {
+            from_primary = false;
+            // inverted salt so deflection choice does not correlate with h
+            return (*non_minimal)[freeBSDHash(pkt.flow_id(), pkt.pathid(),
+                                              ~_hash_salt) % n_non_minimal];
+        }
+        from_primary = true;
+        return (*minimal)[h % n_minimal]; //reps share return
+    }
+
+    uint32_t idx = freeBSDHash(pkt.flow_id(), pkt.pathid(), _hash_salt) % total; // basically only for uniform now
+    if (idx < n_minimal) {
+        from_primary = true;
+        return (*minimal)[idx];
+    }
+    from_primary = false;
+    return (*non_minimal)[idx - n_minimal];
+}
+
 QueueInfo (*DragonflyPlusSwitch::fn)(FibEntry*,FibEntry*)= &DragonflyPlusSwitch::compare_queuesize;
 
 Route* DragonflyPlusSwitch::getNextHop(Packet& pkt, BaseQueue* ingress_port) {
+     uint32_t previous_channel = pkt.get_channel(); 
 
+     assert(pkt.src() < _topo->get_no_hosts());     // <-- added
+     uint32_t src_switch = _topo->get_host_switch(pkt.src());
+     uint32_t src_group = src_switch / _l;
+     
     vector<FibEntry*> * available_hops = _fib->getRoutes(pkt.dst());
     vector<FibEntry*> * available_hops_high = _fib->getRoutesHigh(pkt.dst());
     vector<FibEntry*> * available_hops_medium = _fib->getRoutesMedium(pkt.dst());
     vector<FibEntry*> * available_hops_low = _fib->getRoutesLow(pkt.dst());
-    uint32_t previous_channel = pkt.get_channel(); 
-    uint32_t src_switch = _topo->get_host_switch(pkt.src());
-    uint32_t src_group = src_switch / _l;
+    //uint32_t previous_channel = pkt.get_channel(); 
+    //uint32_t src_switch = _topo->get_host_switch(pkt.src());
+    //uint32_t src_group = src_switch / _l;
 
     uint32_t this_switch = _id;
     uint32_t dst_switch = _topo->get_host_switch(pkt.dst());
@@ -272,6 +328,17 @@ Route* DragonflyPlusSwitch::getNextHop(Packet& pkt, BaseQueue* ingress_port) {
             FibEntry* e = (*available_hops)[ecmp_choice];
             pkt.set_direction(e->getDirection());
             pkt.set_channel(e->getChannel());
+            return e->getEgressPort();
+        }
+
+                if (pkt.type() != UECDATA) {
+            vector<FibEntry*>* minimal = available_hops_high;
+            if (!minimal)
+                minimal = available_hops_medium ? available_hops_medium : available_hops_low;
+            ecmp_choice = freeBSDHash(pkt.flow_id(), pkt.pathid(), _hash_salt) % minimal->size();
+            FibEntry* e = (*minimal)[ecmp_choice];
+            pkt.set_channel(1);
+            pkt.set_direction(e->getDirection());
             return e->getEgressPort();
         }
 
@@ -293,10 +360,22 @@ Route* DragonflyPlusSwitch::getNextHop(Packet& pkt, BaseQueue* ingress_port) {
             case MINIMAL:
                 //cout << " minimal routing" << endl;
                 // need to choose between switch in avilable_hops_high
-                ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_high->size();
-                e = (*available_hops_high)[ecmp_choice];
+                //ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_high->size();      OLD
+                //e = (*available_hops_high)[ecmp_choice];   
+                if (available_hops_high){
+                    ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_high->size();
+                    e = (*available_hops_high)[ecmp_choice];
+                } 
+                else if (available_hops_medium){
+                    ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_medium->size();
+                    e = (*available_hops_medium)[ecmp_choice];
+                } 
+                else {
+                    ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_low->size();
+                    e = (*available_hops_low)[ecmp_choice];
+                }                                                          
                 break;
-            case FPAR:
+            case FPAR: {
                 //cout << " fpar" << endl;
                 int high = 0;
                 int medium = 0;
@@ -339,12 +418,28 @@ Route* DragonflyPlusSwitch::getNextHop(Packet& pkt, BaseQueue* ingress_port) {
                         ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_high->size();
                         e = (*available_hops_high)[ecmp_choice];
                         pkt.set_channel(1);
+                        /*the channel bit prevents a second non-minimal deflection after the first. Once channel=1, the code forces available_hops_high only (the direct global link to dst).
+                         This means at most one intermediate group is traversed — the 8-link / 7-switch path is the maximum.
+                         
+                         problem: get_two_point_diameter_latency is blind to this     !!!!!!!!!!!!!!!!!
+                         */
                     }
                 } else {
                     uint32_t this_group = this_switch / _s;
                     if (previous_channel == 1){
-                        ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_high->size();
-                        e = (*available_hops_high)[ecmp_choice];
+                        if (available_hops_high){
+                            ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_high->size();
+                            e = (*available_hops_high)[ecmp_choice];
+                        } else if (available_hops_medium){
+                            ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_medium->size();
+                            e = (*available_hops_medium)[ecmp_choice];
+                        } else if (available_hops_low){
+                            ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_low->size();
+                            e = (*available_hops_low)[ecmp_choice];
+                        } else {
+                            cerr << "ERRORE" << endl;
+                            exit(1);
+                        }
                         pkt.set_channel(1);
                     } else {
                         if (this_group == src_group){
@@ -414,6 +509,82 @@ Route* DragonflyPlusSwitch::getNextHop(Packet& pkt, BaseQueue* ingress_port) {
                     }
                 }
                 break;
+            }
+                case REPS_DFP: {
+                //Static entropy-based routing that exposes both minimal and non minimal paths as one ECMP set. The path is selected purely from the packet entropy (pathid) set by REPS
+                //The FPAR virtual-channel rules (VL0/VL1) are preserved so that a packet still crosses at most one intermediate group 
+                bool from_primary = true;
+                if (_type == LEAF) {
+                    uint32_t this_group = this_switch / _l;
+                    if (this_group == src_group) {
+                        // Source leaf: every spine in the group is a valid first hop.ECMP draw over MID spreads the entropy across all spines.
+                        bool minimal_half = _entropy_partition_threshold > 0 && pkt.pathid() < _entropy_partition_threshold;
+                        
+                        //vector<FibEntry*>* spines = (minimal_half && available_hops_high)
+                                                       //? available_hops_high
+                                                       //: (available_hops_medium ? available_hops_medium
+                                                                            ////: available_hops_high);
+                        (void)minimal_half;
+                        vector<FibEntry*>* spines = available_hops_medium ? available_hops_medium : available_hops_high;
+                        ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % spines->size();
+                        e = (*spines)[ecmp_choice];
+                        pkt.set_channel(0);
+                    } else {
+                        // Leaf reached in an intermediate group (via a LOW deflection), follow the minimal path to the destination on VL1
+                        ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_high->size();
+                        e = (*available_hops_high)[ecmp_choice];
+                        pkt.set_channel(1);
+                    }
+                } else {
+                    uint32_t this_group = this_switch / _s;
+                    if (previous_channel == 1) {
+                        // Already committed to minimal path (VL1): stay minimal
+                        if (available_hops_high) {
+                            ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_high->size();
+                            e = (*available_hops_high)[ecmp_choice];
+                        } else if (available_hops_medium) {
+                            ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_medium->size();
+                            e = (*available_hops_medium)[ecmp_choice];
+                        } else {
+                            ecmp_choice = freeBSDHash(pkt.flow_id(),pkt.pathid(),_hash_salt) % available_hops_low->size();
+                            e = (*available_hops_low)[ecmp_choice];
+                        }
+                        pkt.set_channel(1);
+                    } 
+                    else if (this_group == src_group) {
+                        /*Source spine (VL0): every global link is a valid first global hop. MID contains all of them (the minimal link included), 
+                        so an ECMP draw over MID selects either the minimal link or a non-minimal (Valiant) intermediate group from the entropy.*/
+                        bool minimal_half = _entropy_partition_threshold > 0 && pkt.pathid() < _entropy_partition_threshold;
+                        // The entropy partition and the minimal share both govern decision, so only one may be active at a time. The partition wins
+                        const bool minshare_active = (_entropy_partition_threshold == 0) && (_minimal_share_pct > 0);
+                        bool force_minimal = minimal_half;
+                        if (minshare_active && available_hops_high) {
+                            force_minimal = (freeBSDHash(pkt.flow_id(), pkt.pathid(), _hash_salt) % 100) < _minimal_share_pct;
+                        }
+                        vector<FibEntry*>* globals = (force_minimal && available_hops_high)
+                                                        ? available_hops_high
+                                                        : (available_hops_medium ? available_hops_medium
+                                                                                  : available_hops_high);
+                        // inverted salt so the index does not correlate with the draw above 
+                        //only while the share is actually active, so every other configuration keeps its original hash
+                        ecmp_choice = freeBSDHash(pkt.flow_id(), pkt.pathid(), minshare_active ? ~_hash_salt : _hash_salt) % globals->size();
+                        e = (*globals)[ecmp_choice];
+                        pkt.set_channel(0);
+                    } 
+                    else {
+                        /*Intermediate spine (VL0): choose between the minimal global link toward the destination group (HIGH) and deflecting down to a leaf in this group (LOW). 
+                        MID is never offered here, so at most one intermediate group is traversed.*/
+                        e = ecmp_select_combined(available_hops_high, available_hops_low, pkt, from_primary);
+                        if (from_primary) {
+                            // minimal global link
+                            pkt.set_channel(1);
+                        } else {
+                            // Deflected down to a leaf
+                            pkt.set_channel(0);
+                        }
+                    }
+                }
+            }break;
         }
 
         pkt.set_direction(e->getDirection());
@@ -546,4 +717,4 @@ Route* DragonflyPlusSwitch::getNextHop(Packet& pkt, BaseQueue* ingress_port) {
     return getNextHop(pkt, ingress_port);
 
 
-}
+} 

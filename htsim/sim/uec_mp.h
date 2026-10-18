@@ -74,7 +74,9 @@ private:
 
 class UecMpReps : public UecMultipath {
 public:
-    UecMpReps(uint16_t no_of_paths, bool debug, bool is_trimming_enabled);
+    
+    UecMpReps(uint16_t no_of_paths, bool debug, bool is_trimming_enabled, bool partition_entropy = false,
+              simtime_picosec base_rtt = 0);
     void processEv(uint16_t path_id, PathFeedback feedback) override;
     uint16_t nextEntropy(uint64_t seq_sent, uint64_t cur_cwnd_in_pkts) override;
 private:
@@ -83,6 +85,37 @@ private:
     uint16_t _crt_path;
     list<uint16_t> _next_pathid;
     bool _is_trimming_enabled = true;  // whether to trim the circular buffer
+    bool _partition_entropy = false;   // whether to partition the entropy space into two halves
+    uint16_t drawEntropy(bool open_tier); /*if partition_entropy = true, the entropy space s split: 
+                                            open_tier=false draws from the low half, open_tier=true draws from the high half*/                                
+    double _min_tier_congestion = 0.0;                                             
+    bool _escalated = false;         
+                                                  
+public:                                                                            
+    static void setEscalateThreshold(double hi) { _escalate_hi = hi; _escalate_lo = hi / 2; }  
+    static double _escalate_hi;                                                    
+    static double _escalate_lo;  
+
+
+   
+    //static double _warmup_explore_us; // absolute duration, same for every flow
+    //static void setWarmupExploreUs(double us) { _warmup_explore_us = us; } 
+    
+    
+    // Time-based warmup: spray openly for the first part of the flow's life
+    static double _warmup_explore_rtt_mult; // a multiple of flow's own base_rtt
+    static void setWarmupExploreRtts(double mult) { _warmup_explore_rtt_mult = mult; }
+    simtime_picosec _base_rtt = 0;
+    simtime_picosec _warmup_deadline = 0;
+        
+    static uint16_t _explore_prob_pct; // Continuous low-level exploration
+    static void setExploreProb(uint16_t pct) { _explore_prob_pct = pct; }
+    static uint16_t _partition_threshold;
+    static void setPartitionThreshold(uint16_t t) { _partition_threshold = t; }
+    uint16_t tierThreshold() const {
+        return _partition_threshold ? _partition_threshold
+                                    : (uint16_t)((_no_of_paths * 20) / 100);
+    }
 };
 
 class UecMpMixed : public UecMultipath {

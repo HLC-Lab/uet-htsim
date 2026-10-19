@@ -7,6 +7,7 @@ This repository is a fork of the official UEC repository, with the following fea
 - Packet logging and per-port statistics (developer: [Chiara Di Stefano](https://github.com/chiaradistefano) and [Simone Lidonnici](https://github.com/SimoneLid))
 - Fixes on the validation tests suite and other bug fixes (developer: [Matthew Fernandez](https://github.com/matt-dbs))
 - ATLAHS integration and ability to run GOAL files (ported from [https://github.com/spcl/HTSIM](https://github.com/spcl/HTSIM)) (developer: [Tommaso Bonato](https://github.com/tommasobo), ported by [Beyzanur Güzel](https://github.com/beyzanurguzel))
+- Dragonfly+ port to UEC, with two REPS load balancing adaptations operating in REPS_DFP routing (developer: [Chiara Frascaria](https://github.com/MillyMobby))
 
 The following features will be added in the next weeks:
 - Dynamic traffic visualization tools

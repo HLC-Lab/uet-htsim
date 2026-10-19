@@ -18,7 +18,7 @@ bool DragonflyPlusTopology::_enable_ecn = false;
 mem_b DragonflyPlusTopology::_ecn_low = 0;
 mem_b DragonflyPlusTopology::_ecn_high = 0;
 
-// Default: all links 200 Gbps
+// Default
 linkspeed_bps DragonflyPlusTopology::_link_speed_global = 200ULL * 1000000000ULL;
 linkspeed_bps DragonflyPlusTopology::_link_speed_local = 200ULL * 1000000000ULL;
 linkspeed_bps DragonflyPlusTopology::_link_speed_host = 200ULL * 1000000000ULL;
@@ -530,6 +530,49 @@ std::string DragonflyPlusTopology::get_link_latencies() {
            std::to_string(_link_latency_host);
 }
 
+simtime_picosec DragonflyPlusTopology::get_two_point_diameter_latency(int src, int dst) const {
+    /*one-way propagation latency of the minimal path between any two hosts. 
+    It is always multiplied by 2 to form the base RTT (round-trip, propagation-only, no queuing). There are 3 cases:
+    */
+    uint32_t src_leaf = get_host_switch(src);
+    uint32_t dst_leaf = get_host_switch(dst);
+
+    if (src_leaf == dst_leaf) {
+        // Case 1: two hosts share the same leaf router. The packet never leaves the switch.
+        return 2 * _link_latency_host
+             + 1 * _switch_latency;
+    }
+
+    uint32_t src_group = src_leaf / _l;
+    uint32_t dst_group = dst_leaf / _l;
+
+    if (src_group == dst_group) {
+        // Case 2: same group, different leaves Traffic must go up from the source leaf to a spine, then back down to the destination leaf
+        return 2 * _link_latency_host
+             + 2 * _link_latency_local
+             + 3 * _switch_latency;
+    }
+
+    // Case 3: cross-group Host -> Src Leaf -> Src Spine -> Dst Spine -> Dst Leaf -> Host
+    return 2 * _link_latency_host
+         + 2 * _link_latency_local
+         +     _link_latency_global
+         + 4 * _switch_latency;
+}
+
+uint32_t DragonflyPlusTopology::get_two_point_diameter(int src, int dst) const {
+    uint32_t src_leaf = get_host_switch(src);
+    uint32_t dst_leaf = get_host_switch(dst);
+
+    if (src_leaf == dst_leaf) return 2;  // same leaf
+
+    uint32_t src_group = src_leaf / _l;
+    uint32_t dst_group = dst_leaf / _l;
+
+    if (src_group == dst_group) return 4;  // same group, different leaves
+    return 5;                               // cross-group (minimal path)
+}
+
 inline void DragonflyPlusTopology::set_link_latency(uint32_t src_switch,
                                                 uint32_t dst_switch,
                                                 simtime_picosec latency) {
@@ -554,10 +597,15 @@ Queue* DragonflyPlusTopology::alloc_switch_queue(QueueLogger* queue_logger, link
         mem_b drop = memFromPkt(RANDOM_BUFFER);
         return new RandomQueue(linkspeed, max_size, *_event_list, queue_logger, drop);
     }
-    case COMPOSITE:{
-         throw std::logic_error("COMPOSITE queue not implemented for Dragonfly+");
-        //return new CompositeQueue(linkspeed, queue_size, *_event_list, queue_logger);
-    }
+    case COMPOSITE:
+    case COMPOSITE_ECN:{ //NEW CHIARA UEC
+        CompositeQueue* q = new CompositeQueue(linkspeed, queue_size, *_event_list, queue_logger,
+         DragonflyPlusSwitch::get_trim_size(), DragonflyPlusSwitch::get_trim_disable());
+        if (_enable_ecn || _queue_type == COMPOSITE_ECN) {
+            q->set_ecn_thresholds(_ecn_low, _ecn_high);
+        }
+                return q;
+     }
     case CTRL_PRIO:{
         return new CtrlPrioQueue(linkspeed, queue_size, *_event_list, queue_logger);
     }
@@ -689,5 +737,4 @@ DragonflyPlusTopology* DragonflyPlusTopology::load(istream& file, QueueLoggerFac
     DragonflyPlusTopology* ft = new DragonflyPlusTopology(k, s, l, h, p, no_of_hosts, q_type, queuesize, logger_factory, &eventlist, topo_type, t, _no_parallel_link, 0, 0, 0);
     cout << "DragonFly+ constructor done, " << ft->get_no_hosts() << " nodes created\n";
 
-    return ft;
-}
+    return ft; }

@@ -1,4 +1,7 @@
 # List of common source files shared among executables.
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(LIB_SOURCES
     firstfit.cpp
     vl2_topology.cpp
@@ -76,6 +79,7 @@ set_property(TARGET htsim_uec_sh_mp PROPERTY EXCLUDE_FROM_ALL TRUE)
 
 add_executable(htsim_uec main_uec.cpp)
 
+add_executable(htsim_uec_dfp_fin main_uec_dfp.cpp)
 # -------------------------------
 # Linking Executables with Libraries
 # -------------------------------
@@ -92,12 +96,13 @@ set (ALL_EXECUTABLES
     htsim_uec_sh
     htsim_uec_sh_mp
     htsim_uec
+    htsim_uec_dfp_fin
 )
 foreach(EXECUTABLE ${ALL_EXECUTABLES})
     # Link each executable with the 'htsim' library defined in the parent directory.
     target_link_libraries(${EXECUTABLE} PRIVATE htsim_dc)
     target_link_libraries(${EXECUTABLE} PRIVATE htsim)
+    #target_link_libraries(${EXECUTABLE} PRIVATE htsim_uec_df) ??????????????????????????????????
     # Add a post-build command to explicitly remove and recreate the symlink for all previous executables.
     add_symlink_target(${EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR})
 endforeach()
-

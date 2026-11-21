@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 #include "2d_torus_topology.h"
@@ -35,17 +36,50 @@ void TwoDimensionalTorusSwitch::receivePacket(Packet& pkt) {
     if (pkt.type() == ETH_PAUSE) {
         // In lossless mode
         EthPausePacket* eth_pkt = (EthPausePacket*)&pkt;
-        // Identify egress queue to which pkt is adressed
-        for (size_t i = 0; i < _ports.size(); i++) {
-            LosslessQueue* egress_q = (LosslessQueue*)_ports.at(i);
-            // NOTE: queues themselves don't have an ID but use their switch's, and packet's sender
-            // ID is always set to sending switch's ID
-            if (egress_q->getRemoteEndpoint() &&
-                ((Switch*)egress_q->getRemoteEndpoint())->getID() == eth_pkt->senderID()) {
-                egress_q->receivePacket(pkt);
-                break;
+        // Identify egress queue to which pkt is addressed
+        // 1. Obtain pkt id
+        // 2. From id, get pkt's sender's (switch) coords
+        // 3. Compare sender's coords to this switch's to figure out which queue is addressed
+        // 4. Duplicate pkt for each VC, forward each to queue
+
+        uint32_t sleepTime = eth_pkt->sleepTime();
+        uint32_t senderId = eth_pkt->senderID();
+        // Free pkt and create duplicates later
+        pkt.free();
+        // switch_coords = [switch_y, switch_x]
+        vector<uint32_t> sender_coords = _torus->get_coords_of_switch[senderId];
+        vector<uint32_t> curr_coords = _torus->get_coords_of_switch[_id];
+
+        if (sender_coords[1] < curr_coords[1]) {
+            // pkt from west, west egress must be paused
+            for (uint32_t vc = 0; vc < _torus->get_n_virtual_channels(); vc++) {
+                EthPausePacket* eth_p = EthPausePacket::newpkt(sleepTime, senderId);
+                _torus->west_egress_queues[curr_coords[0]][curr_coords[1]][vc]->receivePacket(
+                    *eth_p);
+            }
+        } else if (sender_coords[1] > curr_coords[1]) {
+            // pkt from east, east egress must be paused
+            for (uint32_t vc = 0; vc < _torus->get_n_virtual_channels(); vc++) {
+                EthPausePacket* eth_p = EthPausePacket::newpkt(sleepTime, senderId);
+                _torus->east_egress_queues[curr_coords[0]][curr_coords[1]][vc]->receivePacket(
+                    *eth_p);
+            }
+        } else if (sender_coords[0] < curr_coords[0]) {
+            // pkt from north, must pause north egress queue
+            for (uint32_t vc = 0; vc < _torus->get_n_virtual_channels(); vc++) {
+                EthPausePacket* eth_p = EthPausePacket::newpkt(sleepTime, senderId);
+                _torus->north_egress_queues[curr_coords[0]][curr_coords[1]][vc]->receivePacket(
+                    *eth_p);
+            }
+        } else {
+            // pkt from south, south egress queue must be paused
+            for (uint32_t vc = 0; vc < _torus->get_n_virtual_channels(); vc++) {
+                EthPausePacket* eth_p = EthPausePacket::newpkt(sleepTime, senderId);
+                _torus->south_egress_queues[curr_coords[0]][curr_coords[1]][vc]->receivePacket(
+                    *eth_p);
             }
         }
+
         return;
     }
     // cout << "-----------------------------------------------------" << endl;
@@ -56,15 +90,15 @@ void TwoDimensionalTorusSwitch::receivePacket(Packet& pkt) {
     // vector<uint32_t> dest_coords = _torus->get_coords_of_host[pkt.dst()];
     // cout << "src_x=" << pkt_coords[1] << ", src_y=" << pkt_coords[0] << endl;
     // cout << "dst_x=" << dest_coords[1] << ", dst_y=" << dest_coords[0] << endl;
-
+    //
     if (TwoDimensionalTorusSwitch::_routing_strategy == DIMENSION_ORDER) {
         // Fully deterministic routing algorithm, so since pkt's route is fully written in pkt by
         // transport protocol using get_bidir_paths, switch only serves to forward it: no route
         // modifications necessary.
         // NOTE: This now changes, in light of how packets need to be routed to the correct sink
-        // within the host.
+        // among the ones the host is associated to.
         // So now, determine if the packet is at its destination switch, and if so, add the route to
-        // the correct host, and then the correct sink
+        // the correct sink
 
         vector<uint32_t> pkt_target_coords = _torus->get_coords_of_host[pkt.dst()];
         vector<uint32_t> switch_coords = _torus->get_coords_of_switch[_id];
@@ -123,7 +157,8 @@ Route* TwoDimensionalTorusSwitch::getNextHop(Packet& pkt) {
         // cout << "------------------------------------------------" << endl;
         // cout << "Routing packet " << pkt.id() << " from src=" << pkt.src()
         //      << " to dest=" << pkt.dst() << endl;
-        // cout << "Current position: x=" << pkt_coords[1] << ", src_y=" << pkt_coords[0] << endl;
+        // cout << "Current position: x=" << pkt_coords[1] << ", y=" << pkt_coords[0] << endl;
+        // cout << "Dest: x=" << dest_coords[1] << ", y=" << dest_coords[0] << endl;
 
         // First, construct route out of host and into switch if still at src
         // Actually, transport should take care of that: it's responsible for sending a packet from
@@ -145,6 +180,7 @@ Route* TwoDimensionalTorusSwitch::getNextHop(Packet& pkt) {
                 if (src_coords[1] > dest_coords[1] && pkt_coords[1] < dest_coords[1]) {
                     vc = 1;
                 }
+                // cout << "Packet going eastward" << endl;
                 Queue* east_q = _torus->east_egress_queues[pkt_coords[0]][pkt_coords[1]][vc];
 
                 // Is east route congested?
@@ -159,12 +195,17 @@ Route* TwoDimensionalTorusSwitch::getNextHop(Packet& pkt) {
                 next_hop->push_back(_torus->eastbound_pipes[pkt_coords[0]][pkt_coords[1]][vc]);
                 next_hop->push_back(_torus->east_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]
                                         ->getRemoteEndpoint());
+                // cout <<_torus->east_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]->nodename();
+                // cout <<_torus->eastbound_pipes[pkt_coords[0]][pkt_coords[1]][vc]->nodename();
+                // cout <<_torus->east_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]
+                //                         ->getRemoteEndpoint()->nodename() << endl;
             } else {
                 // Westward case:
                 // Check if pkt wrapped around
                 if ((src_coords[1] < dest_coords[1]) && (pkt_coords[1] > dest_coords[1])) {
                     vc = 1;
                 }
+                // cout << "Packet going westward" << endl;
 
                 // Determine whether west is congested
                 Queue* west_q = _torus->west_egress_queues[pkt_coords[0]][pkt_coords[1]][vc];
@@ -175,6 +216,10 @@ Route* TwoDimensionalTorusSwitch::getNextHop(Packet& pkt) {
                 next_hop->push_back(_torus->westbound_pipes[pkt_coords[0]][pkt_coords[1]][vc]);
                 next_hop->push_back(_torus->west_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]
                                         ->getRemoteEndpoint());
+                // cout <<_torus->west_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]->nodename();
+                // cout <<_torus->westbound_pipes[pkt_coords[0]][pkt_coords[1]][vc]->nodename();
+                // cout <<_torus->west_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]
+                //                         ->getRemoteEndpoint()->nodename() << endl;
             }
             // -----------------------
 
@@ -191,6 +236,7 @@ Route* TwoDimensionalTorusSwitch::getNextHop(Packet& pkt) {
                 if ((src_coords[0] > dest_coords[0]) && (pkt_coords[0] < dest_coords[0])) {
                     vc = 1;
                 }
+                // cout << "Packet going southward" << endl;
                 // Check queue congestion
                 Queue* south_q = _torus->south_egress_queues[pkt_coords[0]][pkt_coords[1]][vc];
 
@@ -202,12 +248,17 @@ Route* TwoDimensionalTorusSwitch::getNextHop(Packet& pkt) {
                 next_hop->push_back(_torus->southbound_pipes[pkt_coords[0]][pkt_coords[1]][vc]);
                 next_hop->push_back(_torus->south_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]
                                         ->getRemoteEndpoint());
+                // cout <<_torus->south_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]->nodename();
+                // cout <<_torus->southbound_pipes[pkt_coords[0]][pkt_coords[1]][vc]->nodename();
+                // cout <<_torus->south_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]
+                //                         ->getRemoteEndpoint()->nodename() << endl;
             } else {
                 // Northward case:
                 // Check for wrap-around
                 if ((src_coords[0] < dest_coords[0]) && (pkt_coords[0] > dest_coords[0])) {
                     vc = 1;
                 }
+                // cout << "Packet going northward" << endl;
                 // Check queue congestion
                 Queue* north_q = _torus->north_egress_queues[pkt_coords[0]][pkt_coords[1]][vc];
                 double fullness_ratio =
@@ -218,11 +269,17 @@ Route* TwoDimensionalTorusSwitch::getNextHop(Packet& pkt) {
                 next_hop->push_back(_torus->northbound_pipes[pkt_coords[0]][pkt_coords[1]][vc]);
                 next_hop->push_back(_torus->north_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]
                                         ->getRemoteEndpoint());
+                // cout << _torus->north_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]->nodename();
+                // cout << _torus->northbound_pipes[pkt_coords[0]][pkt_coords[1]][vc]->nodename();
+                // cout << _torus->north_egress_queues[pkt_coords[0]][pkt_coords[1]][vc]
+                //                         ->getRemoteEndpoint()->nodename() << endl;
             }
             // -----------------------
         } else {
             // Else packet has reached its destination switch. The final route from switch to
             // destination host is saved in _host_fib.
+            // cout << "Packet at destination" << endl;
+            // cout << "Packet src id: " << pkt.src() << ", pkt dest: " << pkt.dst() << ", flow id: " << pkt.flow_id() << endl;
             next_hop->push_back(
                 _torus->switch_to_host_queues[dest_coords[0]][dest_coords[1]][dest_coords[2]]);
             next_hop->push_back(
@@ -237,19 +294,22 @@ Route* TwoDimensionalTorusSwitch::getNextHop(Packet& pkt) {
 }
 
 // A packet's destination is a sink created by the transport protocol. Since those sinks can only be
-// created by the protocol before a simulation is run, we create this method to allow adding the
+// created by the protocol before a simulation is ran, we create this method to allow adding the
 // sink to the packet's route.
 // In particular, this method saves which sink is associated to which destination host (and more
 // precisely, to which packet flow of the destination host).
 void TwoDimensionalTorusSwitch::addHostPort(int addr, int flowid, PacketSink* transport_port) {
-    if (_host_fib.find(addr) == _host_fib.end())
-        _host_fib[addr] = new unordered_map<int, PacketSink*>();
-
-    (*_host_fib[addr])[flowid] = transport_port;
+    _host_fib[addr][flowid] = transport_port;
 }
 
 PacketSink* TwoDimensionalTorusSwitch::getHostPort(int addr, int flowid) {
-    PacketSink* sink = (*_host_fib[addr])[flowid];
-    assert(sink);
-    return sink;
+    try {
+        PacketSink* sink = _host_fib.at(addr).at(flowid);
+        return sink;
+    } catch (const out_of_range& e) {
+        cout << "Couldn't find sink in FIB entries for addr " << addr << " and flowid " << flowid
+             << endl;
+    }
+    // NOTE: Below should never be reached
+    assert(0);
 }

@@ -34,7 +34,7 @@ public:
     virtual void receivePacket(Packet& pkt) override;
     virtual Route* getNextHop(Packet& pkt) override;
 
-    // Allow saving transport protocol's pkt sink to route pkt to its destination
+    // Allow saving transport protocol's pkt sink in order to be able to route pkt to its destination
     void addHostPort(int addr, int flowid, PacketSink* transport_port) override;
     PacketSink* getHostPort(int addr, int flowid);
 
@@ -49,7 +49,7 @@ private:
     // Each host/server can be the destination of multiple source hosts and thus belong to multiple
     // packet flows. So, to each host we map another map, which, to each of the host's flow
     // associates the route to the correct transport sink
-    unordered_map<int, unordered_map<int, PacketSink*>*> _host_fib;
+    unordered_map<int, unordered_map<int, PacketSink*>> _host_fib;
 };
 
 #endif  //! _TWO_DIMENSIONAL_TORUS_SWITCH_H

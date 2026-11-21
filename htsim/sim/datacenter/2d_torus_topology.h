@@ -78,6 +78,9 @@ public:
     vector<vector<vector<Queue*>>> switch_internal_ingress_queue;
     // NOTE: switch_to_host_queues aren't associated an ingress queue from the host as the host is
     // the packets' destination. Not sure why that's a good reason to not model buffers but alright.
+    // TODO: Assiging an individual queue to each pipe isn't equivalent to the switch having a
+    // single queue (buffer) for all hosts. If there isn't a good reason to have one queue per pipe,
+    // change this.
 
     //! Switch-to-switch network
     //! 3D vector for Pipe: first 2D correspond to associated switch, 3rd dimension represents the
@@ -131,6 +134,7 @@ public:
     static TwoDimensionalTorusTopology* load(string filename,
                                              EventList& eventlist,
                                              QueueLoggerFactory* q_log_factory,
+                                             torus_routing_strategy routing_strategy,
                                              queue_type switch_q_type,
                                              queue_type host_q_type);
 
@@ -145,6 +149,7 @@ public:
 
     inline uint32_t get_n() const { return _n; }
     inline uint32_t get_m() const { return _m; }
+    inline uint32_t get_n_virtual_channels() const { return _n_virtual_channels; }
 
     virtual void add_switch_loggers(Logfile& log, simtime_picosec sample_period);
     // NOTE: While switches and queues log events themselves, pipes are logged by transport protocol

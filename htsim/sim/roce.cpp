@@ -1,5 +1,6 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*- 
 #include <math.h>
+#include <cassert>
 #include <iostream>
 #include <algorithm>
 #include "roce.h"
@@ -289,7 +290,7 @@ void RoceSrc::send_packet() {
         }
     }
 
-    p = RocePacket::newpkt(_flow, *_route, _highest_sent+1, _mss, false, last_packet,_dstaddr);
+    p = RocePacket::newpkt(_flow, *_route, _highest_sent+1, _mss, false, last_packet, _dstaddr, _srcaddr);
     
     assert(p);
     p->set_pathid(_pathid);

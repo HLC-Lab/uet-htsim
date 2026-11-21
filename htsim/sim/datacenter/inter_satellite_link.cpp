@@ -62,6 +62,9 @@ InterSatelliteLink::InterSatelliteLink(uint32_t constellation_n,
  * Pipe::receivePacket() originally uses _inflight_v, however it's designed with fixed delay in mind
  * and uses FIFO, which means it doesn't schedule packets according to which should arrive to its
  * destination first. So instead, we use a multimap like eventlist, which makes ordering easier.
+ * NOTE: From future self. Physically, the below should never happen, and there should never be any need reordering.
+ * However, I don't have time, and the below should work anyway, so I'm leaving it as is.
+ *
  * Furthermore, if the latest packet to arrive should be delivered earlier than the packet that is
  * currently scheduled, we cancel the latter to put the newer packet in its place.
  */
@@ -80,11 +83,13 @@ void InterSatelliteLink::receivePacket(Packet& pkt) {
     if (was_empty) {
         eventlist().sourceIsPending(*this, delivery_time);
     } else {
+        // NOTE: From future self again, this check should never be needed
         // Check if new packet has earlier delivery_time than current earliest scheduled packet
         auto earliest_sched = _inflight_map.begin()->first;
         if (delivery_time < earliest_sched) {
             // If so, reschedule doNextEvent() call to send next packet earlier
             eventlist().reschedulePendingSource(*this, delivery_time);
+            // NOTE: We don't schedule the packet we just cancelled, as doNextEvent() already does so
         }
     }
 }

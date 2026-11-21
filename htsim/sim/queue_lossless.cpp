@@ -14,7 +14,9 @@ LosslessQueue::LosslessQueue(linkspeed_bps bitrate, mem_b maxsize,
     //an MSS just beginning to be sent when PAUSE frame arrives; this means 2 packets per incoming
     //port, and we must have buffering for all ports except this one (assuming no one hop cycles!)
 
-    setSwitch(sw);
+    // addPort() below this will also call setSwitch, but calling this method twice means the second time
+    // we will fail the assertion in setSwitch. So commenting this line out as redundant.
+    // setSwitch(sw);
 
     if (sw)
         sw->addPort(this);

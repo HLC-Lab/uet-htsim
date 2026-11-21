@@ -523,7 +523,8 @@ int main(int argc, char **argv) {
     case NOT_SET:
         fprintf(stderr, "Route Strategy not set.  Use the -strat param.  \n"
                         "Valid values are perm, rand, ecmp, pull, single, "
-                        "ecmp_host, ecp_ar, ecp_host_ar, and ecmp_rr\n");
+                        "ecmp_host, ecp_ar, ecp_host_ar, and ecmp_rr; "
+                        "for 2D torus: dimension_order, minimal_adaptive\n");
         exit(1);
     default:
         break;
@@ -580,6 +581,7 @@ int main(int argc, char **argv) {
         topo_cfg->set_failed_links(topo_num_failed);
     }
 
+    topo_cfg->set_queue_sizes(queuesize);
     top = make_unique<FatTreeTopology>(topo_cfg.get(), qlf, &eventlist, nullptr);
 #endif
 
@@ -618,7 +620,7 @@ int main(int argc, char **argv) {
 #ifdef TWO_DIMENSIONAL_TORUS
     TwoDimensionalTorusTopology* top;
     if (topo_file) {
-        top = TwoDimensionalTorusTopology::load(topo_file, eventlist, qlf, qt, snd_type);
+        top = TwoDimensionalTorusTopology::load(topo_file, eventlist, qlf, torus_routing_strategy, qt, snd_type);
     } else {
         top = new TwoDimensionalTorusTopology(
             qlf, torus_n, torus_m, torus_host_per_switch, qt, snd_type, queuesize, linkspeed,
@@ -632,6 +634,8 @@ int main(int argc, char **argv) {
         LosslessInputQueue::_high_threshold = (uint64_t)(0.7 * qs);
         LosslessInputQueue::_low_threshold = (uint64_t)(0.3 * qs);
     }
+    no_of_nodes = top->no_of_nodes();
+    cout << no_of_nodes << endl;
 #endif  // TWO_DIMENSIONAL_TORUS
 
     if (log_switches) {
@@ -797,6 +801,7 @@ int main(int argc, char **argv) {
         // said sink
         assert(top->switches[src_coords[0]][src_coords[1]]);
         assert(top->switches[dest_coords[0]][dest_coords[1]]);
+        // Register sources too, as sinks will need to send ACKs/NACKs
         top->switches[src_coords[0]][src_coords[1]]->addHostPort(src, roceSrc->flow_id(), roceSrc);
         top->switches[dest_coords[0]][dest_coords[1]]->addHostPort(dest, roceSrc->flow_id(),
                                                                    roceSnk);
@@ -818,13 +823,13 @@ int main(int argc, char **argv) {
 
             routein = new Route(*top->get_bidir_paths(dest, src, false)->at(choice));
             // routein->add_endpoints(roceSnk, roceSrc);
-            roceSrc->connect(routeout, routein, *roceSnk, timeFromUs((uint32_t)rand() % 100));
+            cout << "Route length: " << routeout->size() << endl;
+            roceSrc->connect(routeout, routein, *roceSnk, crt->start);
         } else if (torus_routing_strategy == MINIMAL_ADAPTIVE_ALG) {
             // Minimal adaptive decides next hop at every switch, so to start create route from
             // host to first switch
 
             Route* src_host_to_switch = new Route();
-
             src_host_to_switch->push_back(
                 top->host_to_switch_queues[src_coords[0]][src_coords[1]][src_coords[2]]);
             src_host_to_switch->push_back(
@@ -844,7 +849,7 @@ int main(int argc, char **argv) {
 
             if (crt->start != TRIGGER_START && start_delta > 0) {
                 crt->start += timeFromUs(drand48() * start_delta);
-                cout << "Start is " << timeAsUs(crt->start) << endl;
+                cout << "Start time is " << timeAsUs(crt->start) << "us" << endl;
             }
             roceSrc->connect(src_host_to_switch, dest_host_to_switch, *roceSnk, crt->start);
         }

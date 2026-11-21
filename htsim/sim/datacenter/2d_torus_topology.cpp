@@ -222,13 +222,13 @@ TwoDimensionalTorusTopology::TwoDimensionalTorusTopology(QueueLoggerFactory* q_l
                 }
                 // Set names
                 northbound_pipes[i][j][vc]->forceName("NorthboundPipe_(" + ntoa(j) + ", " +
-                                                      ntoa(i) + ")");
+                                                      ntoa(i) + ", VC" + ntoa(vc) + ")");
                 eastbound_pipes[i][j][vc]->forceName("EastboundPipe_(" + ntoa(j) + ", " + ntoa(i) +
-                                                     ")");
+                                                     ", VC" + ntoa(vc) + ")");
                 southbound_pipes[i][j][vc]->forceName("SouthboundPipe_(" + ntoa(j) + ", " +
-                                                      ntoa(i) + ")");
+                                                      ntoa(i) + ", VC" + ntoa(vc) + ")");
                 westbound_pipes[i][j][vc]->forceName("WestboundPipe_(" + ntoa(j) + ", " + ntoa(i) +
-                                                     ")");
+                                                     ", VC" + ntoa(vc) + ")");
                 // --------------------
 
                 // --- Create Queues ---
@@ -261,13 +261,13 @@ TwoDimensionalTorusTopology::TwoDimensionalTorusTopology(QueueLoggerFactory* q_l
                                 _queue_size_b / _n_virtual_channels, switches[i][j]);
 
                 north_egress_queues[i][j][vc]->setName("_NorthEgressQueue_(" + ntoa(j) + ", " +
-                                                       ntoa(i) + ")");
+                                                       ntoa(i) + ", VC" + ntoa(vc) + ")");
                 east_egress_queues[i][j][vc]->setName("_EastEgressQueue_(" + ntoa(j) + ", " +
-                                                      ntoa(i) + ")");
+                                                      ntoa(i) + ", VC" + ntoa(vc) + ")");
                 south_egress_queues[i][j][vc]->setName("_SouthEgressQueue_(" + ntoa(j) + ", " +
-                                                       ntoa(i) + ")");
+                                                       ntoa(i) + ", VC" + ntoa(vc) + ")");
                 west_egress_queues[i][j][vc]->setName("_WestEgressQueue_(" + ntoa(j) + ", " +
-                                                      ntoa(i) + ")");
+                                                      ntoa(i) + ", VC" + ntoa(vc) + ")");
                 // Connect switch to these queues
                 if (switch_queue_type != LOSSLESS) {
                     // LosslessQueue will call addPort on switch upon creation
@@ -304,22 +304,26 @@ TwoDimensionalTorusTopology::TwoDimensionalTorusTopology(QueueLoggerFactory* q_l
                     south_ingress_queues[n_i][n_j][vc] = new LosslessInputQueue(
                         *_eventlist, north_egress_queues[i][j][vc], switches[n_i][n_j], _latency);
                     south_ingress_queues[n_i][n_j][vc]->setName("_SouthIngressQueue_(" + ntoa(n_i) +
-                                                                ", " + ntoa(n_j) + ")");
+                                                                ", " + ntoa(n_j) + ", VC" +
+                                                                ntoa(vc) + ")");
 
                     west_ingress_queues[e_i][e_j][vc] = new LosslessInputQueue(
                         *_eventlist, east_egress_queues[i][j][vc], switches[e_i][e_j], _latency);
                     west_ingress_queues[e_i][e_j][vc]->setName("_WestIngressQueue_(" + ntoa(e_i) +
-                                                               ", " + ntoa(e_j) + ")");
+                                                               ", " + ntoa(e_j) + ", VC" +
+                                                               ntoa(vc) + ")");
 
                     north_ingress_queues[s_i][s_j][vc] = new LosslessInputQueue(
                         *_eventlist, south_egress_queues[i][j][vc], switches[s_i][s_j], _latency);
                     north_ingress_queues[s_i][s_j][vc]->setName("_NorthIngressQueue_(" + ntoa(s_i) +
-                                                                ", " + ntoa(s_j) + ")");
+                                                                ", " + ntoa(s_j) + ", VC" +
+                                                                ntoa(vc) + ")");
 
                     east_ingress_queues[w_i][w_j][vc] = new LosslessInputQueue(
                         *_eventlist, west_egress_queues[i][j][vc], switches[w_i][w_j], _latency);
                     east_ingress_queues[w_i][w_j][vc]->setName("_EastIngressQueue_(" + ntoa(w_i) +
-                                                               ", " + ntoa(w_j) + ")");
+                                                               ", " + ntoa(w_j) + ", VC" +
+                                                               ntoa(vc) + ")");
                 } else {
                     // It is still necessary to set the egress queues' endpoints as their opposite
                     // switch, this will be needed by switches to receive packets when using
@@ -340,7 +344,10 @@ TwoDimensionalTorusTopology::TwoDimensionalTorusTopology(QueueLoggerFactory* q_l
     if (switch_queue_type == LOSSLESS) {
         for (uint32_t i = 0; i < _n; i++) {
             for (uint32_t j = 0; j < _m; j++) {
-                switches[i][j]->configureLossless();
+                for (size_t p = 0; p < switches[i][j]->portCount(); p++) {
+                    LosslessQueue* q = (LosslessQueue*)switches[i][j]->getPort(p);
+                    q->initThresholds();
+                }
             }
         }
     }
@@ -349,11 +356,13 @@ TwoDimensionalTorusTopology::TwoDimensionalTorusTopology(QueueLoggerFactory* q_l
 /*
  * Load config from file and return topology
  */
-TwoDimensionalTorusTopology* TwoDimensionalTorusTopology::load(string filename,
-                                                               EventList& eventlist,
-                                                               QueueLoggerFactory* q_log_factory,
-                                                               queue_type switch_q_type,
-                                                               queue_type host_q_type) {
+TwoDimensionalTorusTopology* TwoDimensionalTorusTopology::load(
+    string filename,
+    EventList& eventlist,
+    QueueLoggerFactory* q_log_factory,
+    torus_routing_strategy routing_strategy,
+    queue_type switch_q_type,
+    queue_type host_q_type) {
     uint32_t n, m, host_p_switch, altitude_m;
     uint16_t trim_size;
     float_t inclination_deg;
@@ -361,7 +370,6 @@ TwoDimensionalTorusTopology* TwoDimensionalTorusTopology::load(string filename,
     linkspeed_bps linkspeed_bps;
     bool disable_trim, is_constellation;
     simtime_picosec latency, host_switch_latency;
-    torus_routing_strategy routing_strategy;
 
     string line;
 
@@ -402,13 +410,10 @@ TwoDimensionalTorusTopology* TwoDimensionalTorusTopology::load(string filename,
                 disable_trim = (tokens[1] == "true") ? true : false;
             else if (tokens[0] == "is_constellation")
                 is_constellation = (tokens[1] == "true") ? true : false;
-            else if (tokens[0] == "latency_us")
-                latency = timeFromUs((uint32_t)stoi(tokens[1]));
-            else if (tokens[0] == "host_switch_latency_us")
-                host_switch_latency = timeFromUs((uint32_t)stoi(tokens[1]));
-            else if (tokens[0] == "routing_strategy")
-                routing_strategy =
-                    (tokens[1] == "dimension_order") ? DIMENSION_ORDER : MINIMAL_ADAPTIVE_ALG;
+            else if (tokens[0] == "latency_ns")
+                latency = timeFromNs((uint32_t)stoi(tokens[1]));
+            else if (tokens[0] == "host_switch_latency_ns")
+                host_switch_latency = timeFromNs((uint32_t)stoi(tokens[1]));
         }
 
         topo = new TwoDimensionalTorusTopology(
@@ -417,6 +422,9 @@ TwoDimensionalTorusTopology* TwoDimensionalTorusTopology::load(string filename,
             host_switch_latency, altitude_m, inclination_deg);
 
         cout << "Torus topology created" << endl;
+        cout << "n: " << n << endl;
+        cout << "m: " << m << endl;
+        cout << "p: " << host_p_switch << endl;
 
         file.close();
         return topo;

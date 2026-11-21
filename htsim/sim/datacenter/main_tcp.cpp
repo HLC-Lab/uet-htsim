@@ -1,5 +1,6 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*-      
 #include "config.h"
+#include <cstdint>
 #include <sstream>
 
 #include <iostream>
@@ -83,12 +84,16 @@ int main(int argc, char **argv) {
     double epsilon = 1;
     uint32_t no_of_conns = 0, no_of_nodes = DEFAULT_NODES;
     stringstream filename(ios_base::out);
+    uint64_t flow_size_b = 0;
 
     // Needed for 2d torus
     string top_cfg_file;
 #ifdef TWO_DIMENSIONAL_TORUS
     queue_type switch_qt = LOSSLESS_INPUT_ECN;
     queue_type host_qt = FAIR_PRIO;
+    torus_routing_strategy routing_strategy = torus_routing_strategy::DIMENSION_ORDER;
+    LosslessInputQueue::_high_threshold = (uint64_t)(1000); // Random sample, avoids failing assertion
+    LosslessInputQueue::_low_threshold = (uint64_t)(500);
 #endif
 
     int i = 1;
@@ -114,6 +119,10 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i], "-topo")) {
             top_cfg_file = argv[i + 1];
             cout << "Reading topo cfg file: " << top_cfg_file << endl;
+            i++;
+        } else if (!strcmp(argv[i], "-flow_size")) {
+            flow_size_b = atoi(argv[i + 1]);
+            cout << "Flow size in bytes: " << flow_size_b << endl;
             i++;
         } else if (!strcmp(argv[i], "UNCOUPLED"))
             algo = UNCOUPLED;
@@ -226,7 +235,7 @@ int main(int argc, char **argv) {
 
 #ifdef TWO_DIMENSIONAL_TORUS
     TwoDimensionalTorusTopology* top =
-        TwoDimensionalTorusTopology::load(top_cfg_file, eventlist, &qlf, switch_qt, host_qt);
+        TwoDimensionalTorusTopology::load(top_cfg_file, eventlist, &qlf, routing_strategy, switch_qt, host_qt);
     if (switch_qt == LOSSLESS_INPUT_ECN || switch_qt == LOSSLESS_INPUT) {
         // Sample max queue size to set appropriate PAUSE/UNPAUSE thresholds
         uint64_t qs = (top->north_egress_queues[0][0][0])->maxsize();
@@ -356,6 +365,10 @@ int main(int argc, char **argv) {
                         //if (connection==1)
                         //tcpSrc->set_app_limit(9000);
               
+                        if (flow_size_b > 0)
+                          tcpSrc->set_flowsize(flow_size_b);
+                        // NOTE: There is no mechanism to stop he urn after flows have completed, so CTRL+C manually
+
                         tcpSrc->setName("mtcp_" + ntoa(src) + "_" + ntoa(inter) + "_" + ntoa(dest)+"("+ntoa(connection)+")");
                         logfile.writeName(*tcpSrc);
               

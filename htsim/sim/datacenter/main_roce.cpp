@@ -26,6 +26,9 @@
 #ifdef DRAGONFLY_PLUS
 #include "dragonfly_plus_topology.h"
 #include "dragonfly_plus_switch.h"
+#elif defined TWO_DIMENSIONAL_TORUS
+#include "2d_torus_switch.h"
+#include "2d_torus_topology.h"
 #else
 #include "fat_tree_topology.h"
 #include "fat_tree_switch.h"
@@ -91,6 +94,16 @@ int main(int argc, char **argv) {
     uint32_t l_df = 0;
     uint32_t h_df = 0;
     uint32_t p_df = 0;
+#elif defined TWO_DIMENSIONAL_TORUS
+    uint32_t torus_n = 16;
+    uint32_t torus_m = DEFAULT_NODES / 16;
+    uint32_t torus_host_per_switch = 1;
+    torus_routing_strategy torus_routing_strategy;
+    bool composite_queue_disable_trim = false;
+    uint16_t torus_trim_size = 0;
+    bool torus_is_constellation = false;
+    uint32_t torus_altitude_in_m = 0;
+    float_t torus_inclination_in_deg = 0;
 #endif
 
     uint64_t high_pfc = 15, low_pfc = 12;
@@ -170,7 +183,32 @@ int main(int argc, char **argv) {
             cout << "tiers "<< tiers << endl;
             assert(tiers == 2 || tiers == 3);
             i++;
-        } else if (!strcmp(argv[i],"-queue_type")) {
+        }
+#ifdef TWO_DIMENSIONAL_TORUS
+        else if (!strcmp(argv[i], "-torus__n_m_hps")) {
+            torus_n = atoi(argv[i + 1]);
+            torus_m = atoi(argv[i + 2]);
+            torus_host_per_switch = atoi(argv[i + 3]);
+            cout << "torus dimensions: " << torus_n << " * " << torus_m << " * "
+                 << torus_host_per_switch << endl;
+            i = i + 3;
+        } else if (!strcmp(argv[i], "-torus_constellation__alt_deg")) {
+            torus_is_constellation = true;
+            torus_altitude_in_m = atoi(argv[i + 1]);
+            torus_inclination_in_deg = atof(argv[i + 2]);
+            cout << "constellation params: altitude = " << torus_altitude_in_m
+                 << "m, inclination = " << torus_inclination_in_deg << "deg" << endl;
+            i = i + 2;
+        } else if (!strcmp(argv[i], "-torus_trim_size")) {
+            if (argv[i + 1] == 0) {
+                composite_queue_disable_trim = true;
+            } else {
+                torus_trim_size = atoi(argv[i + 1]);
+            }
+            i++;
+        }
+#endif  // TWO_DIMENSIONAL_TORUS
+        else if (!strcmp(argv[i],"-queue_type")) {
             if (!strcmp(argv[i+1], "composite")) {
                 qt = COMPOSITE;
             } 
@@ -376,6 +414,7 @@ int main(int argc, char **argv) {
                 route_strategy = ECMP_FIB;
                 path_entropy_size = 1;
                 FatTreeSwitch::set_strategy(FatTreeSwitch::RR);
+            }
 #elif defined DRAGONFLY_PLUS                
             if (!strcmp(argv[i+1], "fpar")) {
                 route_strategy = FPAR;
@@ -383,8 +422,19 @@ int main(int argc, char **argv) {
             } else if (!strcmp(argv[i+1], "minimal")) {
                 route_strategy = MINIMAL;
                 DragonflyPlusSwitch::set_strategy(DragonflyPlusSwitch::MINIMAL);
+            }
+#elif defined TWO_DIMENSIONAL_TORUS
+            if (!strcmp(argv[i + 1], "dimension_order")) {
+                route_strategy = TORUS_DIMENSION_ORDER;
+                torus_routing_strategy = torus_routing_strategy::DIMENSION_ORDER;
+                TwoDimensionalTorusSwitch::set_strategy(torus_routing_strategy);
+            } else if (!strcmp(argv[i + 1], "minimal_adaptive")) {
+                route_strategy = TORUS_MINIMAL_ADAPTIVE;
+                torus_routing_strategy = torus_routing_strategy::MINIMAL_ADAPTIVE_ALG;
+                TwoDimensionalTorusSwitch::set_strategy(torus_routing_strategy);
+            }
 #endif
-            }else{
+            else{
                 cout << "Unknown strategy " << argv[i+1] << endl;
                 exit_error(argv[0]);                
             }
@@ -473,7 +523,8 @@ int main(int argc, char **argv) {
     case NOT_SET:
         fprintf(stderr, "Route Strategy not set.  Use the -strat param.  \n"
                         "Valid values are perm, rand, ecmp, pull, single, "
-                        "ecmp_host, ecp_ar, ecp_host_ar, and ecmp_rr\n");
+                        "ecmp_host, ecp_ar, ecp_host_ar, and ecmp_rr; "
+                        "for 2D torus: dimension_order, minimal_adaptive\n");
         exit(1);
     default:
         break;
@@ -530,6 +581,7 @@ int main(int argc, char **argv) {
         topo_cfg->set_failed_links(topo_num_failed);
     }
 
+    topo_cfg->set_queue_sizes(queuesize);
     top = make_unique<FatTreeTopology>(topo_cfg.get(), qlf, &eventlist, nullptr);
 #endif
 
@@ -564,6 +616,27 @@ int main(int argc, char **argv) {
                                         linkspeed, hop_latency, switch_latency);
     }
 #endif
+
+#ifdef TWO_DIMENSIONAL_TORUS
+    TwoDimensionalTorusTopology* top;
+    if (topo_file) {
+        top = TwoDimensionalTorusTopology::load(topo_file, eventlist, qlf, torus_routing_strategy, qt, snd_type);
+    } else {
+        top = new TwoDimensionalTorusTopology(
+            qlf, torus_n, torus_m, torus_host_per_switch, qt, snd_type, queuesize, linkspeed,
+            composite_queue_disable_trim, torus_trim_size, ecn_threshold, ecn_threshold,
+            torus_routing_strategy, torus_is_constellation, hop_latency, switch_latency,
+            torus_altitude_in_m, torus_inclination_in_deg);
+    }
+    if (qt == LOSSLESS_INPUT_ECN || qt == LOSSLESS_INPUT) {
+        // Sample max queue size to set appropriate PAUSE/UNPAUSE thresholds
+        uint64_t qs = (top->north_egress_queues[0][0][0])->maxsize();
+        LosslessInputQueue::_high_threshold = (uint64_t)(0.7 * qs);
+        LosslessInputQueue::_low_threshold = (uint64_t)(0.3 * qs);
+    }
+    no_of_nodes = top->no_of_nodes();
+    cout << no_of_nodes << endl;
+#endif  // TWO_DIMENSIONAL_TORUS
 
     if (log_switches) {
         top->add_switch_loggers(logfile, timeFromUs(20.0));
@@ -717,6 +790,68 @@ int main(int argc, char **argv) {
             assert(top->switches_lf[top->get_host_switch(src)]);
             top->switches_lf[top->get_host_switch(src)]->addHostPort(src,roceSrc->flow_id(),roceSrc);
             top->switches_lf[top->get_host_switch(dest)]->addHostPort(dest,roceSrc->flow_id(),roceSnk);
+        }
+#elif defined TWO_DIMENSIONAL_TORUS
+        vector<uint32_t> src_coords = top->get_coords_of_host[src];
+        vector<uint32_t> dest_coords = top->get_coords_of_host[dest];
+        ((HostQueue*)top->host_to_switch_queues[src_coords[0]][src_coords[1]][src_coords[2]])
+            ->addHostSender(roceSrc);
+
+        // Store the newly created sink in switches' FIB so that packets can be properly routed to
+        // said sink
+        assert(top->switches[src_coords[0]][src_coords[1]]);
+        assert(top->switches[dest_coords[0]][dest_coords[1]]);
+        // Register sources too, as sinks will need to send ACKs/NACKs
+        top->switches[src_coords[0]][src_coords[1]]->addHostPort(src, roceSrc->flow_id(), roceSrc);
+        top->switches[dest_coords[0]][dest_coords[1]]->addHostPort(dest, roceSrc->flow_id(),
+                                                                   roceSnk);
+
+        if (torus_routing_strategy != DIMENSION_ORDER &&
+            torus_routing_strategy != MINIMAL_ADAPTIVE_ALG) {
+            abort();
+        } else if (torus_routing_strategy == DIMENSION_ORDER) {
+            // Rely on get_bidir_paths, which provides full routes instead of just the first hop
+            Route *routeout, *routein;
+            int choice = rand() % net_paths[src][dest]->size();
+            routeout = new Route(*(net_paths[src][dest]->at(choice)));
+            // Push sink as get_bidir_paths did not have access to it
+            // NOTE: Actually, to ensure the correct sink is pushed, we now rely on the switch's
+            // updated FIB (from addHostPort) to route each packet. This is because each packet
+            // mustn't just reach its destination host, but it must also reach the host's sink with
+            // the matching flowid (a host has as many sinks as it has sources, and by
+            // extension, packet flows). routeout->add_endpoints(roceSrc, roceSnk);
+
+            routein = new Route(*top->get_bidir_paths(dest, src, false)->at(choice));
+            // routein->add_endpoints(roceSnk, roceSrc);
+            cout << "Route length: " << routeout->size() << endl;
+            roceSrc->connect(routeout, routein, *roceSnk, crt->start);
+        } else if (torus_routing_strategy == MINIMAL_ADAPTIVE_ALG) {
+            // Minimal adaptive decides next hop at every switch, so to start create route from
+            // host to first switch
+
+            Route* src_host_to_switch = new Route();
+            src_host_to_switch->push_back(
+                top->host_to_switch_queues[src_coords[0]][src_coords[1]][src_coords[2]]);
+            src_host_to_switch->push_back(
+                top->host_to_switch_pipes[src_coords[0]][src_coords[1]][src_coords[2]]);
+            src_host_to_switch->push_back(
+                top->host_to_switch_queues[src_coords[0]][src_coords[1]][src_coords[2]]
+                    ->getRemoteEndpoint());
+
+            Route* dest_host_to_switch = new Route();
+            dest_host_to_switch->push_back(
+                top->host_to_switch_queues[dest_coords[0]][dest_coords[1]][dest_coords[2]]);
+            dest_host_to_switch->push_back(
+                top->host_to_switch_pipes[dest_coords[0]][dest_coords[1]][dest_coords[2]]);
+            dest_host_to_switch->push_back(
+                top->host_to_switch_queues[dest_coords[0]][dest_coords[1]][dest_coords[2]]
+                    ->getRemoteEndpoint());
+
+            if (crt->start != TRIGGER_START && start_delta > 0) {
+                crt->start += timeFromUs(drand48() * start_delta);
+                cout << "Start time is " << timeAsUs(crt->start) << "us" << endl;
+            }
+            roceSrc->connect(src_host_to_switch, dest_host_to_switch, *roceSnk, crt->start);
         }
 #elif defined FAT_TREE                        
 		((HostQueue*)top->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0])->addHostSender(roceSrc);

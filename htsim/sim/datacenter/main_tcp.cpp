@@ -1,5 +1,6 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*-      
 #include "config.h"
+#include <cstdint>
 #include <sstream>
 
 #include <iostream>
@@ -22,12 +23,21 @@
 #include "topology.h"
 #include "connection_matrix.h"
 //#include "vl2_topology.h"
-#include "fat_tree_topology.h"
+// #include "fat_tree_topology.h"
 //#include "oversubscribed_fat_tree_topology.h"
 //#include "multihomed_fat_tree_topology.h"
 //#include "star_topology.h"
 //#include "bcube_topology.h"
 #include <list>
+
+#ifdef TWO_DIMENSIONAL_TORUS
+#include <string>
+#include "2d_torus_switch.h"
+#include "2d_torus_topology.h"
+#include "queue_lossless_input.h"
+#else
+#include "fat_tree_topology.h"
+#endif  // TWO_DIMENSIONAL_TORUS
 
 // Simulation params
 
@@ -74,6 +84,17 @@ int main(int argc, char **argv) {
     double epsilon = 1;
     uint32_t no_of_conns = 0, no_of_nodes = DEFAULT_NODES;
     stringstream filename(ios_base::out);
+    uint64_t flow_size_b = 0;
+
+    // Needed for 2d torus
+    string top_cfg_file;
+#ifdef TWO_DIMENSIONAL_TORUS
+    queue_type switch_qt = LOSSLESS_INPUT_ECN;
+    queue_type host_qt = FAIR_PRIO;
+    torus_routing_strategy routing_strategy = torus_routing_strategy::DIMENSION_ORDER;
+    LosslessInputQueue::_high_threshold = (uint64_t)(1000); // Random sample, avoids failing assertion
+    LosslessInputQueue::_low_threshold = (uint64_t)(500);
+#endif
 
     int i = 1;
     filename << "logout.dat";
@@ -94,6 +115,14 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-nodes")){
             no_of_nodes = atoi(argv[i+1]);
             cout << "no_of_nodes "<<no_of_nodes << endl;
+            i++;
+        } else if (!strcmp(argv[i], "-topo")) {
+            top_cfg_file = argv[i + 1];
+            cout << "Reading topo cfg file: " << top_cfg_file << endl;
+            i++;
+        } else if (!strcmp(argv[i], "-flow_size")) {
+            flow_size_b = atoi(argv[i + 1]);
+            cout << "Flow size in bytes: " << flow_size_b << endl;
             i++;
         } else if (!strcmp(argv[i], "UNCOUPLED"))
             algo = UNCOUPLED;
@@ -203,6 +232,18 @@ int main(int argc, char **argv) {
 #ifdef VL2
     VL2Topology* top = new VL2Topology(&logfile,&eventlist,ff);
 #endif
+
+#ifdef TWO_DIMENSIONAL_TORUS
+    TwoDimensionalTorusTopology* top =
+        TwoDimensionalTorusTopology::load(top_cfg_file, eventlist, &qlf, routing_strategy, switch_qt, host_qt);
+    if (switch_qt == LOSSLESS_INPUT_ECN || switch_qt == LOSSLESS_INPUT) {
+        // Sample max queue size to set appropriate PAUSE/UNPAUSE thresholds
+        uint64_t qs = (top->north_egress_queues[0][0][0])->maxsize();
+        LosslessInputQueue::_high_threshold = (uint64_t)(0.8 * qs);
+        LosslessInputQueue::_low_threshold = (uint64_t)(0.5 * qs);
+    }
+#endif
+
     no_of_nodes = top->no_of_nodes();
     cout << "actual nodes " << no_of_nodes << endl;
 
@@ -324,6 +365,10 @@ int main(int argc, char **argv) {
                         //if (connection==1)
                         //tcpSrc->set_app_limit(9000);
               
+                        if (flow_size_b > 0)
+                          tcpSrc->set_flowsize(flow_size_b);
+                        // NOTE: Flows may complete before simulation ends (`...` start appearing). In that case, CTRL+C 
+
                         tcpSrc->setName("mtcp_" + ntoa(src) + "_" + ntoa(inter) + "_" + ntoa(dest)+"("+ntoa(connection)+")");
                         logfile.writeName(*tcpSrc);
               
@@ -394,6 +439,14 @@ int main(int argc, char **argv) {
                         } else
                             choice = rand()%net_paths[src][dest]->size();
 #endif
+
+#ifdef TWO_DIMENSIONAL_TORUS
+                        size_t n_paths = net_paths[src][dest]->size();
+                        cout << "Paths for " << src << "->" << dest << ": " << n_paths << endl;
+                        choice = rand() % n_paths;
+                        // cout << "Chosen path: " << choice << endl;
+#endif
+
                         //cout << "Choice "<<choice<<" out of "<<net_paths[src][dest]->size();
                         subflows_chosen.push_back(choice);
 

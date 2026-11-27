@@ -1,0 +1,25 @@
+# Current setup mimics one of Starlink's first shell. host_per_switch may vary
+# n 16
+# m 20
+# host_per_switch 1
+n 8
+m 4
+host_per_switch 1
+
+# routing_strategy dimension_order
+# Routing strategy is no longer set here. Since it is mandatory as command line argument for main_roce.cpp through -strat, we use that directly
+queue_size_from_npackets 2000
+linkspeed_Gbps 200
+latency_ns 25
+host_switch_latency_ns 25
+
+# Composite queue parameters
+disable_trim true
+trim_size_b 64
+ecn_high_b 0
+ecn_low_b 0
+
+# If simulating constellation
+is_constellation false
+altitude_m 550000
+inclination_deg 53

@@ -23,6 +23,9 @@ set(LIB_SOURCES
     generic_topology.cpp
     dragonfly_plus_topology.cpp
     dragonfly_plus_switch.cpp
+    2d_torus_topology.cpp
+    2d_torus_switch.cpp
+    inter_satellite_link.cpp
     inc_switch.cpp
     inc_topology.cpp
 )
@@ -39,6 +42,12 @@ target_include_directories(htsim_dc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(htsim_tcp main_tcp.cpp)
 set_property(TARGET htsim_tcp PROPERTY EXCLUDE_FROM_ALL TRUE)
 
+# TCP 2D torus variant
+add_executable(htsim_tcp_2dt main_tcp.cpp)
+set_property(TARGET htsim_tcp_2dt PROPERTY EXCLUDE_FROM_ALL FALSE)
+target_compile_definitions(htsim_tcp_2dt PRIVATE TWO_DIMENSIONAL_TORUS)
+set_target_properties(htsim_tcp_2dt PROPERTIES OUTPUT_NAME "htsim_tcp_2dt")
+
 add_executable(htsim_ndp main_ndp.cpp)
 set_property(TARGET htsim_ndp PROPERTY EXCLUDE_FROM_ALL TRUE)
 
@@ -52,6 +61,12 @@ add_executable(htsim_roce_dfp main_roce.cpp)
 set_property(TARGET htsim_roce_dfp PROPERTY EXCLUDE_FROM_ALL TRUE)
 target_compile_definitions(htsim_roce_dfp PRIVATE DRAGONFLY_PLUS)
 set_target_properties(htsim_roce_dfp PROPERTIES OUTPUT_NAME "htsim_roce_dfp")
+
+# RoCE 2D torus variant
+add_executable(htsim_roce_2dt main_roce.cpp)
+set_property(TARGET htsim_roce_2dt PROPERTY EXCLUDE_FROM_ALL FALSE)
+target_compile_definitions(htsim_roce_2dt PRIVATE TWO_DIMENSIONAL_TORUS)
+set_target_properties(htsim_roce_2dt PROPERTIES OUTPUT_NAME "htsim_roce_2dt")
 
 add_executable(htsim_swift main_swift.cpp)
 set_property(TARGET htsim_swift PROPERTY EXCLUDE_FROM_ALL TRUE)
@@ -81,9 +96,11 @@ add_executable(htsim_uec main_uec.cpp)
 # -------------------------------
 set (ALL_EXECUTABLES
     htsim_tcp
+    htsim_tcp_2dt
     htsim_ndp
     htsim_roce_ft
     htsim_roce_dfp
+    htsim_roce_2dt
     htsim_swift
     htsim_hpcc
     htsim_eqds

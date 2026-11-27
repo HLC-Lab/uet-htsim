@@ -367,7 +367,7 @@ int main(int argc, char **argv) {
               
                         if (flow_size_b > 0)
                           tcpSrc->set_flowsize(flow_size_b);
-                        // NOTE: There is no mechanism to stop he urn after flows have completed, so CTRL+C manually
+                        // NOTE: Flows may complete before simulation ends (`...` start appearing). In that case, CTRL+C 
 
                         tcpSrc->setName("mtcp_" + ntoa(src) + "_" + ntoa(inter) + "_" + ntoa(dest)+"("+ntoa(connection)+")");
                         logfile.writeName(*tcpSrc);
